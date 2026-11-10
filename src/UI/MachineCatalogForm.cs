@@ -6,6 +6,16 @@ internal sealed class MachineCatalogForm : Form
 {
     private readonly List<CatalogMachine> machines = [];
     private readonly HashSet<string> loaded = new(StringComparer.OrdinalIgnoreCase);
+    private readonly HashSet<string> locationsFound = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ComboBox slicer = Picker();
+    private readonly Dictionary<string, string[]> orcaModels = new(StringComparer.Ordinal);
+    private (string Brand, string Vendor)? SupplementalCatalog => slicer.SelectedItem switch
+    {
+        "Bambu Studio" => ("Bambu Lab", "BBL"),
+        "Creality Print" => ("Creality", "Creality"),
+        _ => null
+    };
+    private IEnumerable<CatalogMachine> SelectedMachines => machines.Where(machine => Equals(machine.Catalog.SlicerName, slicer.SelectedItem));
     private readonly ComboBox brand = Picker();
     private readonly ComboBox model = Picker();
     private readonly ComboBox nozzle = Picker();
@@ -72,15 +82,17 @@ internal sealed class MachineCatalogForm : Form
         var locations = new FlowLayoutPanel { AutoSize = true, Dock = DockStyle.Fill };
         locations.Controls.AddRange([connectOrca, browse]);
         connection.Controls.Add(locations, 0, 2);
-        AddField(T("Printer brand", "Marchio stampante"), brand, 0);
-        AddField(T("Printer model", "Modello stampante"), model, 1);
-        AddField(T("Nozzle preset", "Preset ugello"), nozzle, 2);
-        AddField(T("Build plate", "Piatto di stampa"), plate, 3);
-        AddField(T("Filament slots", "Slot filamento"), slots, 4);
-        AddField(T("Profile name", "Nome del profilo"), name, 5);
-        fields.Controls.Add(presets, 0, 6);
+        AddField(T("Destination slicer", "Slicer di destinazione"), slicer, 0);
+        slicer.Items.AddRange(["Bambu Studio", "OrcaSlicer", "Anycubic Slicer Next", "Creality Print"]);
+        AddField(T("Printer brand", "Marchio stampante"), brand, 1);
+        AddField(T("Printer model", "Modello stampante"), model, 2);
+        AddField(T("Nozzle preset", "Preset ugello"), nozzle, 3);
+        AddField(T("Build plate", "Piatto di stampa"), plate, 4);
+        AddField(T("Filament slots", "Slot filamento"), slots, 5);
+        AddField(T("Profile name", "Nome del profilo"), name, 6);
+        fields.Controls.Add(presets, 0, 7);
         fields.SetColumnSpan(presets, 2);
-        fields.Controls.Add(status, 0, 7);
+        fields.Controls.Add(status, 0, 8);
         fields.SetColumnSpan(status, 2);
         var cancel = new RoundedButton { Text = T("Cancel", "Annulla"), DialogResult = DialogResult.Cancel };
         var actions = new FlowLayoutPanel { Dock = DockStyle.Bottom, AutoSize = true, FlowDirection = FlowDirection.RightToLeft };
@@ -100,10 +112,28 @@ internal sealed class MachineCatalogForm : Form
                 args.Value = ReferenceConfiguration.PlateLabel(value);
         };
         name.TextChanged += (_, _) => UpdateSave();
+        status.Text = T("Choose a destination slicer to see its printers.", "Scegli uno slicer di destinazione per vedere le sue stampanti.");
+        slicer.SelectionChangeCommitted += async (_, _) => await LoadMachines(locationsFound
+            .Where(path => Equals(LegacyProfileCatalog.GetCatalogSlicerName(path), slicer.SelectedItem)).ToArray());
         Shown += async (_, _) =>
         {
             orcaStatus.Text = T("Checking for OrcaSlicer…", "Ricerca di OrcaSlicer…");
-            await LoadMachines(LegacyProfileCatalog.InstalledSlicers().ToArray());
+            UseWaitCursor = true;
+            slicer.Enabled = connectOrca.Enabled = browse.Enabled = false;
+            try
+            {
+                locationsFound.UnionWith(await Task.Run(() => LegacyProfileCatalog.InstalledSlicers().ToArray()));
+            }
+            catch (Exception failure) when (failure is IOException or UnauthorizedAccessException)
+            {
+                status.Text = failure.Message;
+            }
+            finally
+            {
+                UseWaitCursor = false;
+                slicer.Enabled = browse.Enabled = true;
+                UpdateOrcaStatus();
+            }
         };
         connectOrca.Click += async (_, _) => await ConnectOrca();
         browse.Click += async (_, _) =>
@@ -169,6 +199,7 @@ internal sealed class MachineCatalogForm : Form
     private async Task LoadMachines(string[] paths, bool remember = false)
     {
         UseWaitCursor = true;
+        slicer.Enabled = false;
         connectOrca.Enabled = false;
         browse.Enabled = false;
         UpdateSave();
@@ -181,7 +212,10 @@ internal sealed class MachineCatalogForm : Form
                 if (loaded.Contains(path))
                 {
                     if (remember)
+                    {
+                        slicer.SelectedItem = LegacyProfileCatalog.GetCatalogSlicerName(path);
                         LegacyProfileCatalog.RememberSlicerLocation(path);
+                    }
                     continue;
                 }
                 try
@@ -192,7 +226,11 @@ internal sealed class MachineCatalogForm : Form
                         machines.AddRange(entries);
                         loaded.Add(path);
                         if (remember)
+                        {
+                            locationsFound.Add(path);
+                            slicer.SelectedItem = entries[0].Catalog.SlicerName;
                             LegacyProfileCatalog.RememberSlicerLocation(path);
+                        }
                     }
                     else
                         error = T("No compatible presets found for this installation.", "Nessun preset compatibile trovato per questa installazione.");
@@ -202,39 +240,84 @@ internal sealed class MachineCatalogForm : Form
                     error = failure.Message;
                 }
             }
-            Populate(brand, machines.Select(machine => machine.Brand).Distinct().Order());
-            status.Text = error ?? (machines.Count == 0
-                ? T("Locate an installed slicer with printer presets, or add a reference 3MF from the profile library.",
-                    "Trova uno slicer installato con preset stampante oppure aggiungi un 3MF di riferimento dalla libreria.")
-                : CatalogSummary());
+            if (SupplementalCatalog is { } catalog && !orcaModels.ContainsKey(catalog.Vendor))
+            {
+                string? orca = locationsFound.FirstOrDefault(path => LegacyProfileCatalog.GetCatalogSlicerName(path) == "OrcaSlicer");
+                if (orca is not null)
+                {
+                    try
+                    {
+                        orcaModels[catalog.Vendor] = await Task.Run(() => LegacyProfileCatalog.ReadOrcaModels(orca, catalog.Vendor));
+                    }
+                    catch (Exception failure) when (failure is IOException or UnauthorizedAccessException or System.Text.Json.JsonException)
+                    {
+                        error ??= failure.Message;
+                    }
+                }
+            }
+            IEnumerable<string> brands = SelectedMachines.Select(machine => machine.Brand);
+            if (SupplementalCatalog is { } supplement && orcaModels.GetValueOrDefault(supplement.Vendor) is { Length: > 0 })
+                brands = brands.Append(supplement.Brand);
+            Populate(brand, brands.Distinct(StringComparer.OrdinalIgnoreCase).Order());
+            UpdateModels();
+            UpdateNozzles();
+            UpdateMachine();
+            status.Text = error ?? (slicer.SelectedItem is "Creality Print"
+                ? T("For Creality Print, use From a 3MF reference in the profile library.",
+                    "Per Creality Print, usa Da un riferimento 3MF nella libreria profili.")
+                : !SelectedMachines.Any()
+                    ? T("Locate this slicer or add a reference 3MF from the profile library.",
+                        "Individua questo slicer o aggiungi un 3MF di riferimento dalla libreria profili.")
+                    : CatalogSummary());
         }
         finally
         {
             UseWaitCursor = false;
-            orcaConnected = machines.Any(machine => machine.Catalog.SlicerName == "OrcaSlicer");
-            connectOrca.Enabled = !orcaConnected;
+            slicer.Enabled = true;
             browse.Enabled = true;
-            var stateColors = orcaConnected ? ConversionDetailsForm.SuccessColors : ConversionDetailsForm.ErrorColors;
-            orcaStatus.ForeColor = stateColors.Ink;
-            orcaStatus.Text = orcaConnected
-                ? T("OrcaSlicer connected", "OrcaSlicer collegato")
-                : T("OrcaSlicer not connected · Use Connect OrcaSlicer to select its folder.",
-                    "OrcaSlicer non collegato · Usa Collega OrcaSlicer per selezionare la cartella.");
-            orcaStatusPanel.Invalidate();
+            UpdateOrcaStatus();
             UpdateSave();
         }
     }
 
-    private void UpdateModels() => Populate(model, machines.Where(machine => Equals(machine.Brand, brand.SelectedItem))
-        .Select(machine => machine.Model).Distinct().Order());
+    private void UpdateOrcaStatus()
+    {
+        orcaConnected = locationsFound.Any(path => LegacyProfileCatalog.GetCatalogSlicerName(path) == "OrcaSlicer");
+        connectOrca.Enabled = !orcaConnected;
+        var stateColors = orcaConnected ? ConversionDetailsForm.SuccessColors : ConversionDetailsForm.ErrorColors;
+        orcaStatus.ForeColor = stateColors.Ink;
+        orcaStatus.Text = orcaConnected
+            ? T("OrcaSlicer connected", "OrcaSlicer collegato")
+            : T("OrcaSlicer not connected · Use Connect OrcaSlicer to select its folder.",
+                "OrcaSlicer non collegato · Usa Collega OrcaSlicer per selezionare la cartella.");
+        orcaStatusPanel.Invalidate();
+    }
 
-    private void UpdateNozzles() => Populate(nozzle, machines.Where(machine =>
-        Equals(machine.Brand, brand.SelectedItem) && Equals(machine.Model, model.SelectedItem)).OrderBy(machine => machine.Nozzle));
+    private void UpdateModels()
+    {
+        IEnumerable<string> models = SelectedMachines.Where(machine => Equals(machine.Brand, brand.SelectedItem))
+            .Select(machine => machine.Model);
+        if (SupplementalCatalog is { } catalog && Equals(catalog.Brand, brand.SelectedItem))
+            models = models.Concat(orcaModels.GetValueOrDefault(catalog.Vendor) ?? []);
+        Populate(model, models.Distinct(StringComparer.OrdinalIgnoreCase).Order());
+    }
+
+    private void UpdateNozzles()
+    {
+        Populate(nozzle, SelectedMachines.Where(machine =>
+            Equals(machine.Brand, brand.SelectedItem) && string.Equals(machine.Model, model.SelectedItem as string,
+                StringComparison.OrdinalIgnoreCase)).OrderBy(machine => machine.Nozzle));
+        if (nozzle.Items.Count == 0)
+            UpdateMachine();
+    }
 
     private void UpdateMachine()
     {
         plate.Items.Clear();
         presets.Text = "";
+        if (Machine is null && model.SelectedItem is string && SupplementalCatalog is not null)
+            presets.Text = T("Use a 3MF reference saved with this printer in the destination slicer.",
+                "Usa un riferimento 3MF salvato con questa stampante nello slicer di destinazione.");
         if (Machine is CatalogMachine machine)
         {
             presets.Text = T($"Process · {machine.Process}\nFilament · {machine.Filament}",
@@ -258,8 +341,8 @@ internal sealed class MachineCatalogForm : Form
 
     private string CatalogSummary()
     {
-        int models = machines.Select(item => item.Model).Distinct().Count();
-        string slicers = string.Join(", ", machines.Select(item => item.Catalog.SlicerName).Distinct());
+        int models = SelectedMachines.Select(item => item.Model).Distinct().Count();
+        string slicers = (string)slicer.SelectedItem!;
         return T($"{brand.Items.Count} brands · {models} models · {slicers}",
             $"{brand.Items.Count} marchi · {models} modelli · {slicers}");
     }

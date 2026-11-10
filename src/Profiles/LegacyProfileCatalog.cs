@@ -21,11 +21,14 @@ internal sealed class LegacyProfileCatalog
     private readonly Dictionary<string, SlicerPreset> processes;
     private readonly Dictionary<string, SlicerPreset> filaments;
     private string SlicerExecutable => Path.GetFileNameWithoutExtension(executable).ToLowerInvariant();
-    internal string SlicerName => SlicerExecutable switch
+    internal string SlicerName => GetCatalogSlicerName(executable)!;
+
+    internal static string? GetCatalogSlicerName(string path) => Path.GetFileNameWithoutExtension(path).ToLowerInvariant() switch
     {
         "orca-slicer" => "OrcaSlicer",
         "bambu-studio" => "Bambu Studio",
-        _ => "Anycubic Slicer Next"
+        "anycubicslicernext" => "Anycubic Slicer Next",
+        _ => null
     };
     private static Task<LegacyProfileCatalog>? catalog;
 
@@ -128,6 +131,16 @@ internal sealed class LegacyProfileCatalog
             var source = new LegacyProfileCatalog(executable, roots);
             return source.GetMachines(vendor, roots);
         }).OrderBy(machine => machine.Brand).ThenBy(machine => machine.Model).ThenBy(machine => machine.Nozzle).ToArray();
+    }
+
+    internal static string[] ReadOrcaModels(string executable, string vendor)
+    {
+        string manifest = Path.Combine(Path.GetDirectoryName(executable)!, "resources", "profiles", vendor + ".json");
+        if (!File.Exists(manifest))
+            return [];
+        return ReadPreset(File.ReadAllText(manifest))?["machine_model_list"] is JsonArray models
+            ? models.OfType<JsonObject>().Select(model => Text(model, "name")).OfType<string>().ToArray()
+            : [];
     }
 
     private IEnumerable<CatalogMachine> GetMachines(string vendor, string[] roots)

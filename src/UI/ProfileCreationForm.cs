@@ -42,7 +42,7 @@ internal sealed class ProfileCreationForm : Form
         Font = new Font("Segoe UI", 10F);
         BackColor = Canvas;
         ForeColor = Ink;
-        ClientSize = new Size(555, 385);
+        ClientSize = new Size(555, 430);
         ShowInTaskbar = false;
         MinimizeBox = false;
         MaximizeBox = false;
@@ -53,8 +53,10 @@ internal sealed class ProfileCreationForm : Form
         var intro = new Label
         {
             AutoSize = true, MaximumSize = new Size(500, 0), ForeColor = Muted,
-            Text = T("Choose or type your hardware to find a matching 3MF. Leave a field blank to include any value.",
-                "Scegli o digita i componenti per trovare un 3MF compatibile. Lascia vuoto un campo per includere tutti i valori.")
+            Text = T("Supported destination slicers", "Slicer di destinazione supportati")
+                + "\nBambu Studio · OrcaSlicer · Anycubic Slicer Next · Creality Print\n\n"
+                + T("Add a 3MF saved in your destination slicer. Use the hardware fields to filter the references.",
+                    "Aggiungi un 3MF salvato nello slicer di destinazione. Usa i campi della stampante per filtrare i riferimenti.")
         };
         layout.Controls.Add(intro, 0, 0);
         layout.SetColumnSpan(intro, 2);
@@ -171,8 +173,7 @@ internal sealed class ProfileCreationForm : Form
             var matches = nozzles.Where(item => string.IsNullOrWhiteSpace(plate.Text) ||
                 item.Configuration.Plates.Any(value => Matches(plate.Text, value))).ToArray();
 
-            SetSuggestions(brand, references.Select(item => item.Configuration.Machine.Brand)
-                .Concat(["Anycubic", "Bambu Lab", "Creality", "Elegoo", "Original Prusa", "Qidi"]));
+            SetSuggestions(brand, references.Select(item => item.Configuration.Machine.Brand));
             SetSuggestions(model, brands.Select(item => item.Configuration.Machine.Model));
             SetSuggestions(nozzle, models.Select(item => item.Configuration.Machine.NozzleDiameter.ToString("G", CultureInfo.CurrentCulture))
                 .Concat(new[] { 0.2, 0.25, 0.4, 0.6, 0.8 }.Select(value => value.ToString("G", CultureInfo.CurrentCulture))));

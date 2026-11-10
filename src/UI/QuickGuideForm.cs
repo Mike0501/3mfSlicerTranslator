@@ -45,8 +45,8 @@ internal sealed class QuickGuideForm : Form
             T("Click Browse… and choose the downloaded 3MF. Use its active print settings or select an embedded preset if one is available.",
               "Premi Sfoglia… e scegli il 3MF scaricato. Usa le impostazioni di stampa attive oppure seleziona un preset incorporato, se disponibile."));
         AddStep("2", T("Choose the destination", "Scegli la destinazione"),
-            T("Use Create profile… → New profile… to choose a machine from a slicer catalog and save it as a destination. To reuse a project saved in a slicer, use From a 3MF reference… in the library or Reference 3MF… in the main window. Use Customize… to save a print preset.",
-              "Usa Crea profilo… → Nuovo profilo… per scegliere una macchina dal catalogo di uno slicer e salvarla come destinazione. Per riusare un progetto salvato nello slicer, usa Da un riferimento 3MF… in libreria oppure Riferimento 3MF… nella finestra principale. Usa Personalizza… per salvare un preset di stampa."));
+            T("In Create profile… → New profile…, choose the destination slicer before choosing a printer. For Creality Print or a printer without a compatible preset, use From a 3MF reference… in the library or Reference 3MF… in the main window. Use Customize… to save a print preset.",
+              "In Crea profilo… → Nuovo profilo…, scegli lo slicer di destinazione prima della stampante. Per Creality Print o per una stampante senza un preset compatibile, usa Da un riferimento 3MF… in libreria oppure Riferimento 3MF… nella finestra principale. Usa Personalizza… per salvare un preset di stampa."));
         AddStep("3", T("Choose which settings to keep", "Decidi quali impostazioni tenere"),
             T("Click Translate and save… and choose a new file name. If print settings differ, use compatible source values, keep destination values, or open the manual review to choose them individually.",
               "Premi Traduci e salva… e scegli un nuovo nome. Se le impostazioni di stampa differiscono, usa i valori compatibili di origine, mantieni quelli di destinazione oppure apri la revisione manuale e scegli voce per voce."));
