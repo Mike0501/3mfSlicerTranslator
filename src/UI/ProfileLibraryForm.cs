@@ -62,8 +62,9 @@ internal sealed class ProfileLibraryForm : Form
         layout.Controls.Add(status, 0, 3);
 
         var add = new RoundedButton { Text = T("New profile…", "Nuovo profilo…") };
+        var catalog = new RoundedButton { Text = T("From slicer presets…", "Dai preset dello slicer…") };
         var close = new RoundedButton { Text = T("Close", "Chiudi"), DialogResult = DialogResult.Cancel };
-        actions.Controls.AddRange([add, migrate, customize]);
+        actions.Controls.AddRange([add, catalog, migrate, customize]);
         if (!saveOnly)
         {
             use = new RoundedButton(primary: true) { Text = T("Use profile", "Usa profilo") };
@@ -78,6 +79,7 @@ internal sealed class ProfileLibraryForm : Form
         profiles.SelectedIndexChanged += (_, _) => UpdateDetails();
         profiles.DoubleClick += async (_, _) => { if (!saveOnly) await UseSelected(); };
         add.Click += async (_, _) => await CreateProfile();
+        catalog.Click += async (_, _) => await CreateCatalogProfile();
         customize.Click += async (_, _) => await CustomizePreset();
         migrate.Click += async (_, _) =>
         {
@@ -163,6 +165,19 @@ internal sealed class ProfileLibraryForm : Form
             () => Task.Run(() => ProfileStore.ImportReference(name, path, machine: machine, buildPlate: plate)),
             T("Saving the reference…", "Salvataggio del riferimento…"),
             T("Profile saved with a copy of the reference.", "Profilo salvato con una copia del riferimento."));
+    }
+
+    private async Task CreateCatalogProfile()
+    {
+        using var editor = new MachineCatalogForm(profiles.Items.OfType<DestinationProfile>().Select(item => item.Name)) { Icon = Icon };
+        if (editor.ShowDialog(this) != DialogResult.OK || editor.Machine is not CatalogMachine machine)
+            return;
+        string name = editor.ProfileName;
+        string plate = editor.BuildPlate;
+        int slots = editor.SlotCount;
+        _ = await SaveProfile(() => Task.Run(() => machine.Catalog.Create(machine, name, plate, slots)),
+            T("Generating a reference in the slicer…", "Generazione del riferimento nello slicer…"),
+            T("Printer profile saved.", "Profilo stampante salvato."));
     }
 
     private async Task UseSelected()

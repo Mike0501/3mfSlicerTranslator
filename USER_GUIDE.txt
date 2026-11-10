@@ -34,6 +34,19 @@ quick guide. The app saves your language and theme preferences.
 
 -Saving printer profiles
 
+Click Create profile, then From slicer presets to build a destination profile
+from an installed slicer's printer catalog. Choose a brand, model, nozzle
+preset, compatible build plate, and the number of filament slots. The app uses
+the slicer's process and filament presets to export a complete reference 3MF.
+Select the saved profile under Profile when converting. The saved reference
+continues to work if the original slicer is removed.
+
+The catalog uses compatible JSON presets from OrcaSlicer, Anycubic Slicer Next,
+or Bambu Studio installations. Use Locate slicer to select a portable or
+nonstandard installation. Available models and nozzle sizes depend on the
+installed presets. For machines missing from the catalog, save a project in
+the destination slicer and use the reference workflow below.
+
 Click Create profile, then New profile. Choose or type the printer brand,
 model, nozzle diameter, and build plate to filter the available references.
 Leave any field blank to accept all values for that field. If no reference

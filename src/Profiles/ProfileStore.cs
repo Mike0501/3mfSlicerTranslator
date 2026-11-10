@@ -38,8 +38,8 @@ internal static class ProfileStore
             string printer = reference.Machine.Preset;
             string plate = reference.CurrentPlate ?? "";
             var profile = previous is null
-                ? new DestinationProfile(name, printer, "", "", plate, 0, 0, path, Machine: reference.Machine)
-                : previous with { Printer = printer, ReferencePath = path, Bed = plate, Machine = reference.Machine };
+                ? new DestinationProfile(name, printer, "", "", plate, 0, reference.FilamentSlots, path, Machine: reference.Machine)
+                : previous with { Printer = printer, ReferencePath = path, Bed = plate, Machine = reference.Machine, Slots = reference.FilamentSlots };
 
             Save(profile, previous);
             saved = true;
