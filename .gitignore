@@ -1,11 +1,5 @@
 bin/
 obj/
 .verification/
+/.local/
 *.3mf
-/.data
-/.pdata
-/.rdata
-/.reloc
-/.rsrc
-/.rsrc_1
-/.text

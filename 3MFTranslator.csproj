@@ -6,9 +6,9 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>3MFTranslator</AssemblyName>
-    <ApplicationIcon>Translator.ico</ApplicationIcon>
+    <ApplicationIcon>assets/Translator.ico</ApplicationIcon>
   </PropertyGroup>
   <ItemGroup>
-    <EmbeddedResource Include="Translator.ico" LogicalName="Translator.Icon" />
+    <EmbeddedResource Include="assets/Translator.ico" LogicalName="Translator.Icon" />
   </ItemGroup>
 </Project>

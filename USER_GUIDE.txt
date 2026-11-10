@@ -1,0 +1,85 @@
+3mfSlicerTranslator User Guide
+==============================
+
+Getting started
+---------------
+On Windows, open bin/Release/esito/3MFTranslator.exe after building the app.
+To build it, install the .NET 10 SDK and run this command from the repository root.
+
+    dotnet build -c Release -o bin/Release/esito
+
+Use the selector in the upper-right corner to switch between English and Italian.
+The sun and moon switch changes the theme. The question mark opens the in-app
+quick guide. The app saves your language and theme preferences.
+
+Converting a project
+--------------------
+1. Click Browse and choose the source 3MF. Under Source settings to import,
+   use its active settings or select an embedded process preset. The app uses
+   the active settings for fields missing from the selected preset.
+2. In the destination slicer, choose your printer, nozzle, and presets. Save a
+   project with a simple object. In the translator, click Reference 3MF and
+   open that project, or click Profile to choose a saved destination profile.
+3. Click Translate and save and choose a new file name. If the print settings
+   differ, choose Use source settings, Keep destination settings, or Review
+   manually to select values individually. The app keeps destination values
+   where no compatible source value is available. Cancel stops the conversion.
+4. Open Result details below the report. Red indicates errors, yellow indicates
+   warnings, and green indicates success without warnings. Open the translated
+   3MF as a project in the destination slicer, slice it, and check the preview.
+   Check that the model fits if the build plate size has changed.
+
+Saving printer profiles
+-----------------------
+Click Create profile, then Add from 3MF, and choose a project saved in a supported
+destination slicer. The library keeps a copy under
+%LOCALAPPDATA%\3MFTranslator\references. Select it under Profile when converting.
+You can create and use these profiles without the slicer that generated the 3MF.
+
+Each reference serves as a base preset. Select it and click Customize to save a
+variant with a different layer height, wall count, sparse infill density, or
+support setting. Variants share the same reference and can be edited later.
+During conversion, choose Keep destination settings to apply the selected
+variant, or use Review manually to choose individual settings.
+
+References added with an earlier version still use their original saved paths.
+Use Convert to 3MF to migrate an older local preset, or migrate it on first use.
+Migration requires the original slicer and its presets.
+
+Compatibility
+-------------
+Bambu Studio, OrcaSlicer, and Anycubic Slicer Next can be used as both sources
+and destinations. The destination requires an FFF nozzle. The app can adapt a
+multi-nozzle Bambu or Orca project when all source nozzles match the diameter of
+the destination nozzle.
+
+The app also imports PrusaSlicer 2.x and SuperSlicer projects with embedded
+geometry and settings, one build plate, and one filament. These imports include
+negative volumes, modifiers, instances, and compatible process settings. The
+report flags excluded variable layer heights, per-layer events, and height
+ranges. This version excludes Cura, the PrusaSlicer 3 project format, and
+virtual filaments.
+
+In the shared Bambu/Orca format, the app preserves meshes, plates, positions,
+colors, and filament assignments. When the destination has fewer filament
+slots, the app can remove unused slots if it can verify the assignments. The
+report shows the mapping. Projects with painted colors or per-layer sequences
+need enough slots to preserve the original indices.
+
+Compatible source settings can include layer height, walls, infill, supports,
+print speeds, and accelerations. The printer configuration, machine limits,
+temperatures, filament profiles, and purging settings come from the destination
+reference. The app removes source G-code and reports excluded custom settings.
+
+Command-line usage
+------------------
+From the repository root, run the following command with new paths for the
+output project and report.
+
+    dotnet bin/Release/esito/3MFTranslator.dll convert source.3mf reference.3mf translated.3mf report.txt
+
+To select an embedded preset, add its archive path after the report path,
+for example Metadata/process_settings_1.config.
+
+Exit code 0 means the project was saved, 1 means a conversion or write error,
+and 2 means invalid arguments.
