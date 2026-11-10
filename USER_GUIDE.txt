@@ -23,6 +23,10 @@ quick guide. The app saves your language and theme preferences.
    differ, choose Use source settings, Keep destination settings, or Review
    manually to select values individually. The app keeps destination values
    where no compatible source value is available. Cancel stops the conversion.
+   If the destination has fewer filament slots, the desktop app can ask you
+   to confirm or adjust the suggested mapping for the used filaments. When
+   multiple filaments share a destination slot, they use the color of the
+   lowest-numbered source slot assigned to it.
 4. Open Result details below the report. Red indicates errors, yellow indicates
    warnings, and green indicates success without warnings. Open the translated
    3MF as a project in the destination slicer, slice it, and check the preview.
@@ -69,8 +73,9 @@ virtual filaments.
 In the shared Bambu/Orca format, the app preserves meshes, plates, positions,
 colors, and filament assignments. When the destination has fewer filament
 slots, the app can remove unused slots if it can verify the assignments. The
-report shows the mapping. Projects with painted colors or per-layer sequences
-need enough slots to preserve the original indices.
+report shows the mapping. The desktop app can also remap supported painted
+colors. Projects with per-layer sequences or layer events need enough slots
+to preserve the original indices.
 
 Compatible source settings can include layer height, walls, infill, supports,
 print speeds, and accelerations. The printer configuration, machine limits,

@@ -129,7 +129,8 @@ internal static class ProjectConverter
     }
 
     internal static ConversionResult Convert(string sourcePath, string templatePath, string outputPath,
-        string? sourcePresetEntry = null, ReviewSettings? review = null, PrintPreset? destinationPreset = null)
+        string? sourcePresetEntry = null, ReviewSettings? review = null, PrintPreset? destinationPreset = null,
+        ReviewFilamentSlots? reviewSlots = null)
     {
         outputPath = Path.GetFullPath(outputPath);
         if (File.Exists(outputPath))
@@ -167,10 +168,13 @@ internal static class ProjectConverter
         modelRoot.Elements(Core + "metadata").Single(node => (string?)node.Attribute("name") == "Application").Value = targetApp;
 
         XDocument modelSettings = legacy?.TranslateModel(source, modelRoot, warnings) ?? source.ReadXml(ModelSettings);
+        var remappedMeshes = new Dictionary<string, XDocument>(StringComparer.OrdinalIgnoreCase);
         int[] sourceSlots = SourceFilaments.Fit(source, model, modelSettings, original, preset,
-            originalColors.Length, targetColors.Length, warnings);
-        string[] colors = sourceSlots.Select(slot => originalColors[slot - 1]).ToArray();
-        var variant = SourceFilaments.ActiveVariant(original, modelSettings, sourceSlots, originalColors.Length);
+            originalColors, targetColors.Length, warnings, reviewSlots, remappedMeshes);
+        string[] colors = sourceSlots.Select((slot, index) => slot == 0 ? targetColors[index] : originalColors[slot - 1]).ToArray();
+        var variantSlots = reviewSlots is not null && originalColors.Length > targetColors.Length
+            ? Enumerable.Range(1, originalColors.Length).ToArray() : sourceSlots;
+        var variant = SourceFilaments.ActiveVariant(original, modelSettings, variantSlots, originalColors.Length);
         if (sourceNozzles > 1)
             warnings.Add(T($"A project with {sourceNozzles} nozzles was adapted to one nozzle. Check filament changes in the preview.", $"Progetto da {sourceNozzles} ugelli adattato a un solo ugello. Verifica i cambi di filamento nell'anteprima."));
         CopyPalette(original, target, colors, targetColors, sourceSlots, warnings);
@@ -205,6 +209,8 @@ internal static class ProjectConverter
                         WriteXml(output, name, FilterRelationships(source.ReadXml(name), name, retained));
                     else if (name.Equals(ContentTypes, StringComparison.OrdinalIgnoreCase))
                         WriteXml(output, name, FilterContentTypes(source.ReadXml(name), retained));
+                    else if (remappedMeshes.TryGetValue(name, out XDocument? mesh))
+                        WriteXml(output, name, mesh);
                     else
                         source.CopyTo(name, output);
                 }
@@ -287,8 +293,9 @@ internal static class ProjectConverter
             palette[i] = colors[i];
 
         if (source["filament_type"] is JsonArray sourceTypes && target["filament_type"] is JsonArray targetTypes &&
-            (sourceTypes.Count < sourceSlots[^1] || targetTypes.Count < colors.Length ||
-             Enumerable.Range(0, colors.Length).Any(index => !JsonNode.DeepEquals(sourceTypes[sourceSlots[index] - 1], targetTypes[index]))))
+            (sourceTypes.Count < sourceSlots.Max() || targetTypes.Count < colors.Length ||
+             Enumerable.Range(0, colors.Length).Any(index => sourceSlots[index] > 0 &&
+                 !JsonNode.DeepEquals(sourceTypes[sourceSlots[index] - 1], targetTypes[index]))))
             warnings.Add(T("Some materials differ. Filament profiles and temperatures come from the destination reference.", "Alcuni materiali differiscono. I profili filamento e le temperature provengono dal modello di destinazione."));
         if (colors.Length < targetColors.Length)
             warnings.Add(T("The extra destination slots are available in the slicer.", "Gli slot extra del modello restano disponibili nello slicer."));

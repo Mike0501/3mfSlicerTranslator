@@ -547,7 +547,12 @@ internal sealed class TranslatorForm : Form
         {
             string reference = selectedProfile?.ReferencePath ?? templatePath;
             ConversionResult result = await Task.Run(() =>
-                ProjectConverter.Convert(sourcePath, reference, outputPath, preset, review, selectedProfile?.Preset));
+                ProjectConverter.Convert(sourcePath, reference, outputPath, preset, review, selectedProfile?.Preset,
+                    (slots, colors, capacity) => Invoke(() =>
+                    {
+                        using var mapping = new FilamentMappingForm(slots, colors, capacity) { Icon = Icon };
+                        return mapping.ShowDialog(this) == DialogResult.OK ? mapping.Destinations : throw new OperationCanceledException();
+                    })));
             SetDetails(ConversionDetails.Completed(outputPath, result));
             ShowReport(T("File saved", "File salvato"), T($"Project saved to {outputPath}{Environment.NewLine}{Environment.NewLine}", $"Progetto salvato in {outputPath}{Environment.NewLine}{Environment.NewLine}") + Program.FormatReport(result));
         }
