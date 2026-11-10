@@ -1,0 +1,91 @@
+using System.Text.Json;
+
+namespace Translator;
+
+internal sealed record DestinationProfile(string Name, string Printer, string Process, string Filament,
+    string Bed, decimal LayerHeight, int Slots, string? ReferencePath = null, PrintPreset? Preset = null)
+{
+    public override string ToString() => string.IsNullOrWhiteSpace(Name) ? Printer : Name;
+}
+
+internal static class ProfileStore
+{
+    private static readonly string StorePath = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "3MFTranslator", "destinations.json");
+
+    internal static List<DestinationProfile> ReadSaved() =>
+        File.Exists(StorePath) ? JsonSerializer.Deserialize<List<DestinationProfile>>(File.ReadAllText(StorePath)) ?? [] : [];
+
+    internal static DirectoryInfo CreateMigrationFolder() =>
+        Directory.CreateDirectory(Path.Combine(Path.GetDirectoryName(StorePath)!, "migration", Guid.NewGuid().ToString("N")));
+
+    internal static DestinationProfile ImportReference(string name, string source, DestinationProfile? previous = null)
+    {
+        // Validate the archive before creating a copy, and use the saved copy as the source of profile metadata.
+        _ = ProjectConverter.GetReferencePrinter(source);
+        string root = Path.GetDirectoryName(StorePath)!;
+        DirectoryInfo folder = Directory.CreateDirectory(Path.Combine(root, "references", Guid.NewGuid().ToString("N")));
+        bool saved = false;
+        try
+        {
+            string path = Path.Combine(folder.FullName, Path.GetFileName(source));
+            using (FileStream input = File.OpenRead(source))
+            using (var output = new FileStream(path, FileMode.CreateNew, FileAccess.Write))
+                input.CopyTo(output);
+            string printer = ProjectConverter.GetReferencePrinter(path);
+            var profile = previous is null
+                ? new DestinationProfile(name, printer, "", "", "", 0, 0, path)
+                : previous with { Printer = printer, ReferencePath = path };
+
+            Save(profile, previous);
+            saved = true;
+            return profile;
+        }
+        finally
+        {
+            if (!saved)
+                folder.Delete(recursive: true);
+        }
+    }
+
+    internal static DestinationProfile SavePreset(DestinationProfile source, string name, PrintPreset preset)
+    {
+        _ = ProjectConverter.GetDestinationPreset(source with { Preset = preset });
+        var variant = source with { Name = name, Preset = preset };
+        bool editing = source.Preset is not null && source.Name.Equals(name, StringComparison.CurrentCultureIgnoreCase);
+        Save(variant, editing ? source : null);
+        return variant;
+    }
+
+    private static void Save(DestinationProfile profile, DestinationProfile? previous)
+    {
+        using var gate = new FileStream(StorePath + ".lock", FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
+        List<DestinationProfile> profiles = ReadSaved();
+        int index = profiles.FindIndex(item => item.Name.Equals(profile.Name, StringComparison.CurrentCultureIgnoreCase));
+        if (previous is null)
+        {
+            if (index >= 0)
+                throw new InvalidOperationException(T("A profile with this name already exists.", "Esiste già un profilo con questo nome."));
+            profiles.Add(profile);
+        }
+        else
+        {
+            if (index < 0 || profiles[index] != previous)
+                throw new InvalidOperationException(T("The profile has changed. Reopen the library and try again.",
+                    "Il profilo è cambiato. Riapri la libreria e riprova."));
+            profiles[index] = profile;
+        }
+
+        string temporary = StorePath + "." + Guid.NewGuid().ToString("N") + ".tmp";
+        try
+        {
+            File.WriteAllText(temporary, JsonSerializer.Serialize(profiles.OrderBy(item => item.Name)));
+            File.Move(temporary, StorePath, overwrite: true);
+        }
+        finally
+        {
+            if (File.Exists(temporary))
+                File.Delete(temporary);
+        }
+    }
+}
