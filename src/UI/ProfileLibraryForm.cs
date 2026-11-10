@@ -61,10 +61,10 @@ internal sealed class ProfileLibraryForm : Form
         status.Margin = new Padding(3, 8, 3, 3);
         layout.Controls.Add(status, 0, 3);
 
-        var add = new RoundedButton { Text = T("New profile…", "Nuovo profilo…") };
-        var catalog = new RoundedButton { Text = T("From slicer presets…", "Dai preset dello slicer…") };
+        var catalog = new RoundedButton(primary: saveOnly) { Text = T("New profile…", "Nuovo profilo…") };
+        var add = new RoundedButton { Text = T("From a 3MF reference…", "Da un riferimento 3MF…") };
         var close = new RoundedButton { Text = T("Close", "Chiudi"), DialogResult = DialogResult.Cancel };
-        actions.Controls.AddRange([add, catalog, migrate, customize]);
+        actions.Controls.AddRange([catalog, add, migrate, customize]);
         if (!saveOnly)
         {
             use = new RoundedButton(primary: true) { Text = T("Use profile", "Usa profilo") };
@@ -87,7 +87,7 @@ internal sealed class ProfileLibraryForm : Form
                 _ = await MigrateProfile(profile);
         };
         Reload(previous?.Name);
-        ActiveControl = saveOnly || profiles.Items.Count == 0 ? add : profiles;
+        ActiveControl = saveOnly || profiles.Items.Count == 0 ? catalog : profiles;
     }
 
     private void Reload(string? name)
@@ -121,7 +121,7 @@ internal sealed class ProfileLibraryForm : Form
     {
         if (profile.Machine is not ReferenceMachine machine)
             return profile.Printer;
-        string plate = profile.Bed.Length == 0 ? T("Reference default", "Predefinito del riferimento") : profile.Bed;
+        string plate = profile.Bed.Length == 0 ? T("Reference default", "Predefinito del riferimento") : ReferenceConfiguration.PlateLabel(profile.Bed);
         return string.Join(Environment.NewLine, machine.Model,
             T($"Nozzle · {machine.NozzleDiameter} mm", $"Ugello · {machine.NozzleDiameter} mm"),
             T($"Build plate · {plate}", $"Piatto · {plate}"));

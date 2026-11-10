@@ -9,7 +9,7 @@ namespace Translator;
 internal sealed record SlicerPreset(string Name, JsonObject Settings);
 
 internal sealed record CatalogMachine(LegacyProfileCatalog Catalog, string Brand, string Model, decimal Nozzle,
-    string Preset, string Process, string Filament, decimal LayerHeight, IReadOnlyList<string> Plates)
+    string Preset, string Process, string Filament, decimal LayerHeight, string? DefaultPlate, IReadOnlyList<string> Plates)
 {
     public override string ToString() => $"{Nozzle} mm · {Preset} ({Catalog.SlicerName})";
 }
@@ -65,7 +65,23 @@ internal sealed class LegacyProfileCatalog
         string[] paths = ["AnycubicSlicerNext/AnycubicSlicerNext.exe", "OrcaSlicer/orca-slicer.exe", "Bambu Studio/bambu-studio.exe"];
         return new[] { programFiles, localPrograms }.SelectMany(root => paths.Select(path => Path.Combine(root, path)))
             .Concat(paths.Select(path => ReadSlicerLocation(Path.GetFileName(path))))
+            .Concat(WorkspaceOrcaLocations())
             .OfType<string>().Where(File.Exists).Distinct(StringComparer.OrdinalIgnoreCase);
+    }
+
+    private static IEnumerable<string> WorkspaceOrcaLocations()
+    {
+        // Release builds launched from this checkout can use its portable tools.
+        for (DirectoryInfo? directory = new(AppContext.BaseDirectory); directory is not null; directory = directory.Parent)
+        {
+            if (!File.Exists(Path.Combine(directory.FullName, "3MFTranslator.csproj")))
+                continue;
+            string tools = Path.Combine(directory.FullName, ".local", "slicers");
+            if (Directory.Exists(tools))
+                foreach (string location in Directory.EnumerateDirectories(tools, "OrcaSlicer*"))
+                    yield return Path.Combine(location, "orca-slicer.exe");
+            yield break;
+        }
     }
 
     private static string SlicerLocationFile(string executable) => Path.Combine(
@@ -108,12 +124,13 @@ internal sealed class LegacyProfileCatalog
             .Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
         return vendors.SelectMany(vendor =>
         {
-            var source = new LegacyProfileCatalog(executable, [Path.Combine(resources, vendor), Path.Combine(system, vendor)]);
-            return source.GetMachines(vendor);
+            string[] roots = [Path.Combine(resources, vendor), Path.Combine(system, vendor)];
+            var source = new LegacyProfileCatalog(executable, roots);
+            return source.GetMachines(vendor, roots);
         }).OrderBy(machine => machine.Brand).ThenBy(machine => machine.Model).ThenBy(machine => machine.Nozzle).ToArray();
     }
 
-    private IEnumerable<CatalogMachine> GetMachines(string vendor)
+    private IEnumerable<CatalogMachine> GetMachines(string vendor, string[] roots)
     {
         string brand = vendor == "BBL" ? "Bambu Lab" : vendor;
         foreach (SlicerPreset printer in printers.Values)
@@ -130,8 +147,24 @@ internal sealed class LegacyProfileCatalog
             var filament = SelectPreset(filaments, printer, defaultFilament, _ => true);
             if (process is null || filament is null || !TryHeight(Text(process.Settings, "layer_height") ?? "", out decimal layer))
                 continue;
-            string[] plates = ReferenceConfiguration.PlateTemperatureKeys.Keys.Where(bed => SupportsBed(printer, filament, bed)).ToArray();
-            yield return new(this, brand, model, nozzle, printer.Name, process.Name, filament.Name, layer, plates);
+            string[] plates = ReferenceConfiguration.PlateTemperatureKeys.Keys
+                .Where(bed => SupportsBed(printer, filament, bed, vendor == "BBL")).ToArray();
+            string? defaultPlate = Text(settings, "default_bed_type");
+            if (string.IsNullOrWhiteSpace(defaultPlate) &&
+                model.IndexOfAny(Path.GetInvalidFileNameChars()) < 0 && !model.EndsWith('.'))
+            {
+                foreach (string root in roots.Reverse())
+                {
+                    string path = Path.Combine(root, "machine", model + ".json");
+                    if (File.Exists(path) && ReadPreset(File.ReadAllText(path)) is JsonObject modelSettings &&
+                        Text(modelSettings, "default_bed_type") is { Length: > 0 } found)
+                    {
+                        defaultPlate = found;
+                        break;
+                    }
+                }
+            }
+            yield return new(this, brand, model, nozzle, printer.Name, process.Name, filament.Name, layer, defaultPlate, plates);
         }
     }
 
@@ -144,12 +177,13 @@ internal sealed class LegacyProfileCatalog
     {
         if (machine.Catalog != this || slots is < 1 or > 4 || (plate.Length > 0 && !machine.Plates.Contains(plate)))
             throw new InvalidDataException(T("Choose a valid printer, plate and slot count.", "Scegli stampante, piatto e numero di slot validi."));
-        var profile = new DestinationProfile(name, machine.Preset, machine.Process, machine.Filament, plate, machine.LayerHeight, slots);
+        string effectivePlate = plate.Length == 0 ? machine.DefaultPlate ?? "" : plate;
+        var profile = new DestinationProfile(name, machine.Preset, machine.Process, machine.Filament, effectivePlate, machine.LayerHeight, slots);
         return SaveReference(profile, printers[machine.Preset], processes[machine.Process], filaments[machine.Filament], previous: null);
     }
 
-    private static bool SupportsBed(SlicerPreset printer, SlicerPreset filament, string bed) =>
-        bed.Length == 0 || (Text(printer.Settings, "support_multi_bed_types") == "1" &&
+    private static bool SupportsBed(SlicerPreset printer, SlicerPreset filament, string bed, bool isBambu = false) =>
+        bed.Length == 0 || (ReferenceConfiguration.SupportsMultiplePlates(printer.Settings, isBambu) &&
             ReferenceConfiguration.PlateTemperatureKeys.TryGetValue(bed, out string? temperature) &&
             HasBedTemperature(filament.Settings, temperature) &&
             HasBedTemperature(filament.Settings, temperature + "_initial_layer"));

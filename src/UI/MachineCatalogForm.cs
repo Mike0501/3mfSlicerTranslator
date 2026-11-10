@@ -13,6 +13,7 @@ internal sealed class MachineCatalogForm : Form
     private readonly NumericUpDown slots = new() { Minimum = 1, Maximum = 4, Value = 1, Dock = DockStyle.Fill };
     private readonly TextBox name = new() { MaxLength = 60, Dock = DockStyle.Fill, BackColor = Input, ForeColor = Ink };
     private readonly Label status = new() { AutoSize = true, MaximumSize = new Size(480, 0), ForeColor = Muted };
+    private readonly Label presets = new() { AutoSize = true, MaximumSize = new Size(480, 0), ForeColor = Muted };
     private readonly RoundedButton browse = new() { Text = T("Locate slicer…", "Trova slicer…") };
     private readonly RoundedButton save = new(primary: true) { Text = T("Save", "Salva"), DialogResult = DialogResult.OK };
     private readonly HashSet<string> names;
@@ -32,7 +33,7 @@ internal sealed class MachineCatalogForm : Form
         BackColor = Canvas;
         ForeColor = Ink;
         Font = new Font("Segoe UI", 10F);
-        ClientSize = new Size(550, 395);
+        ClientSize = new Size(550, 440);
         MinimumSize = new Size(500, 390);
         MinimizeBox = false;
         ShowInTaskbar = false;
@@ -46,12 +47,14 @@ internal sealed class MachineCatalogForm : Form
         AddField(T("Build plate", "Piatto di stampa"), plate, 4);
         AddField(T("Filament slots", "Slot filamento"), slots, 5);
         AddField(T("Profile name", "Nome del profilo"), name, 6);
-        layout.Controls.Add(status, 0, 7);
+        layout.Controls.Add(presets, 0, 7);
+        layout.SetColumnSpan(presets, 2);
+        layout.Controls.Add(status, 0, 8);
         layout.SetColumnSpan(status, 2);
         var cancel = new RoundedButton { Text = T("Cancel", "Annulla"), DialogResult = DialogResult.Cancel };
         var actions = new FlowLayoutPanel { Dock = DockStyle.Bottom, AutoSize = true, FlowDirection = FlowDirection.RightToLeft };
         actions.Controls.AddRange([save, cancel]);
-        layout.Controls.Add(actions, 0, 8);
+        layout.Controls.Add(actions, 0, 9);
         layout.SetColumnSpan(actions, 2);
         Controls.Add(layout);
         AcceptButton = save;
@@ -60,6 +63,12 @@ internal sealed class MachineCatalogForm : Form
         brand.SelectedIndexChanged += (_, _) => UpdateModels();
         model.SelectedIndexChanged += (_, _) => UpdateNozzles();
         nozzle.SelectedIndexChanged += (_, _) => UpdateMachine();
+        plate.FormattingEnabled = true;
+        plate.Format += (_, args) =>
+        {
+            if (args.ListItem is string value)
+                args.Value = ReferenceConfiguration.PlateLabel(value);
+        };
         name.TextChanged += (_, _) => UpdateSave();
         Shown += async (_, _) => await LoadMachines(LegacyProfileCatalog.InstalledSlicers().ToArray());
         browse.Click += async (_, _) =>
@@ -116,8 +125,7 @@ internal sealed class MachineCatalogForm : Form
             status.Text = error ?? (machines.Count == 0
                 ? T("Locate an installed slicer with printer presets, or add a reference 3MF from the profile library.",
                     "Trova uno slicer installato con preset stampante oppure aggiungi un 3MF di riferimento dalla libreria.")
-                : T("Choose the hardware. The slicer supplies its process and filament presets.",
-                    "Scegli i componenti. Lo slicer fornisce i preset di processo e filamento."));
+                : CatalogSummary());
         }
         finally
         {
@@ -136,9 +144,15 @@ internal sealed class MachineCatalogForm : Form
     private void UpdateMachine()
     {
         plate.Items.Clear();
+        presets.Text = "";
         if (Machine is CatalogMachine machine)
         {
-            Populate(plate, new[] { T("Slicer default", "Predefinito dello slicer") }.Concat(machine.Plates));
+            presets.Text = T($"Process · {machine.Process}\nFilament · {machine.Filament}",
+                $"Processo · {machine.Process}\nFilamento · {machine.Filament}");
+            string defaultLabel = T("Slicer default", "Predefinito dello slicer");
+            if (machine.DefaultPlate is { Length: > 0 } defaultPlate)
+                defaultLabel += " · " + ReferenceConfiguration.PlateLabel(defaultPlate);
+            Populate(plate, new[] { defaultLabel }.Concat(machine.Plates));
             if (name.Text.Length == 0 || name.Text == suggestedName)
             {
                 string suggestion = $"{machine.Model} {machine.Nozzle} mm";
@@ -151,6 +165,14 @@ internal sealed class MachineCatalogForm : Form
 
     private void UpdateSave() => save.Enabled = !UseWaitCursor && Machine is not null &&
         ProfileName.Length > 0 && !names.Contains(ProfileName);
+
+    private string CatalogSummary()
+    {
+        int models = machines.Select(item => item.Model).Distinct().Count();
+        string slicers = string.Join(", ", machines.Select(item => item.Catalog.SlicerName).Distinct());
+        return T($"{brand.Items.Count} brands · {models} models · {slicers}",
+            $"{brand.Items.Count} marchi · {models} modelli · {slicers}");
+    }
 
     private static ComboBox Picker() => new()
     {

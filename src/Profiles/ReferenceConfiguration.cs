@@ -15,6 +15,16 @@ internal sealed record ReferenceConfiguration(ReferenceMachine Machine, string? 
         ["Engineering Plate"] = "eng_plate_temp"
     };
 
+    internal static string PlateLabel(string plate) => plate switch
+    {
+        "High Temp Plate" or "Smooth PEI Plate" => T("Smooth PEI Plate (High Temp Plate)", "Piatto PEI liscio (High Temp Plate)"),
+        "Textured PEI Plate" => T("Textured PEI Plate", "Piatto PEI ruvido (Textured PEI Plate)"),
+        _ => plate
+    };
+
+    internal static bool SupportsMultiplePlates(JsonObject settings, bool isBambu) => isBambu ||
+        ProcessSettings.StringValue(settings["support_multi_bed_types"]) is "1" or "true";
+
     internal static ReferenceConfiguration Read(JsonObject settings, string preset, double nozzleDiameter)
     {
         string model = Text("printer_model") ?? preset;
@@ -24,7 +34,7 @@ internal sealed record ReferenceConfiguration(ReferenceMachine Machine, string? 
         if (plate is not null)
             plates.Add(plate);
         int slots = (settings["filament_colour"] as JsonArray)?.Count ?? 0;
-        if (Text("support_multi_bed_types") is "1" or "true" && slots > 0)
+        if (SupportsMultiplePlates(settings, model.StartsWith("Bambu Lab ", StringComparison.OrdinalIgnoreCase)) && slots > 0)
         {
             foreach ((string candidate, string key) in PlateTemperatureKeys)
                 if (candidate != plate && HasTemperatures(settings[key], slots) &&
