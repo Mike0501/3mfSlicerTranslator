@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 using static Translator.AppTheme;
 
@@ -7,14 +8,14 @@ internal sealed class ProfileCreationForm : Form
 {
     private sealed record ReferenceChoice(string Path, string Label, ReferenceConfiguration Configuration)
     {
-        public override string ToString() => Label;
+        public override string ToString() => $"{Label} · {Configuration.Machine.Model} · {Configuration.Machine.NozzleDiameter} mm";
     }
 
     private readonly List<ReferenceChoice> references = [];
-    private readonly ComboBox brand = Picker();
-    private readonly ComboBox model = Picker();
-    private readonly ComboBox nozzle = Picker();
-    private readonly ComboBox plate = Picker();
+    private readonly ComboBox brand = Picker(editable: true);
+    private readonly ComboBox model = Picker(editable: true);
+    private readonly ComboBox nozzle = Picker(editable: true);
+    private readonly ComboBox plate = Picker(editable: true);
     private readonly ComboBox reference = Picker();
     private readonly TextBox name = new() { Dock = DockStyle.Fill, MaxLength = 60, BackColor = Input, ForeColor = Ink };
     private readonly Label status = new() { AutoSize = true, ForeColor = Muted, MaximumSize = new Size(500, 0) };
@@ -23,11 +24,13 @@ internal sealed class ProfileCreationForm : Form
     private readonly RoundedButton save = new(primary: true) { Text = T("Save", "Salva"), DialogResult = DialogResult.OK };
     private readonly IReadOnlySet<string> usedNames;
     private string suggestedName = "";
+    private bool refreshing;
 
     internal string ProfileName => name.Text.Trim();
     internal string? ReferencePath => (reference.SelectedItem as ReferenceChoice)?.Path;
     internal ReferenceMachine? Machine => (reference.SelectedItem as ReferenceChoice)?.Configuration.Machine;
-    internal string? BuildPlate => plate.SelectedItem is string { Length: > 0 } selected ? selected : null;
+    internal string? BuildPlate => (reference.SelectedItem as ReferenceChoice)?.Configuration.Plates
+        .FirstOrDefault(value => Matches(plate.Text, value) && plate.Text.Trim().Length > 0);
 
     internal ProfileCreationForm(IReadOnlyList<DestinationProfile> profiles)
     {
@@ -50,8 +53,8 @@ internal sealed class ProfileCreationForm : Form
         var intro = new Label
         {
             AutoSize = true, MaximumSize = new Size(500, 0), ForeColor = Muted,
-            Text = T("Choose a configuration from saved profiles or add reference projects from your slicer.",
-                "Scegli una configurazione dai profili salvati o aggiungi progetti di riferimento dal tuo slicer.")
+            Text = T("Choose or type your hardware to find a matching 3MF. Leave a field blank to include any value.",
+                "Scegli o digita i componenti per trovare un 3MF compatibile. Lascia vuoto un campo per includere tutti i valori.")
         };
         layout.Controls.Add(intro, 0, 0);
         layout.SetColumnSpan(intro, 2);
@@ -75,23 +78,15 @@ internal sealed class ProfileCreationForm : Form
         AcceptButton = save;
         CancelButton = cancel;
 
-        nozzle.Format += (_, args) => args.Value = $"{args.ListItem} mm";
-        plate.Format += (_, args) =>
-        {
-            if (args.ListItem is "")
-                args.Value = T("Reference default", "Predefinito del riferimento");
-        };
-        brand.SelectionChangeCommitted += (_, _) => UpdateModels();
-        model.SelectionChangeCommitted += (_, _) => UpdateNozzles();
-        nozzle.SelectionChangeCommitted += (_, _) => UpdatePlates();
-        plate.SelectionChangeCommitted += (_, _) => UpdateReferences();
+        foreach (ComboBox field in new[] { brand, model, nozzle, plate })
+            field.TextChanged += (_, _) => RefreshChoices();
         reference.SelectionChangeCommitted += (_, _) => UpdateName();
         name.TextChanged += (_, _) => UpdateSave();
         add.Click += async (_, _) => await AddReferences();
         Shown += async (_, _) => await LoadReferences(profiles.Where(item => item.ReferencePath is not null)
             .Select(item => (item.ReferencePath!, item.Name)).ToArray());
-        ActiveControl = add;
-        UpdateBrands();
+        ActiveControl = brand;
+        RefreshChoices();
 
         void AddField(string label, Control field, int row)
         {
@@ -132,9 +127,9 @@ internal sealed class ProfileCreationForm : Form
                 else
                     references[index] = item;
             }
-            if (loaded.FirstOrDefault() is ReferenceChoice first)
-                UpdateBrands(first);
-            status.Text = error ?? "";
+            RefreshChoices(loaded.FirstOrDefault());
+            if (error is not null)
+                status.Text = error;
         }
         finally
         {
@@ -163,46 +158,49 @@ internal sealed class ProfileCreationForm : Form
         return (loaded, errorMessage);
     }
 
-    private IEnumerable<ReferenceChoice> ByBrand => references.Where(item => Equals(item.Configuration.Machine.Brand, brand.SelectedItem));
-    private IEnumerable<ReferenceChoice> ByModel => ByBrand.Where(item => Equals(item.Configuration.Machine.Model, model.SelectedItem));
-    private IEnumerable<ReferenceChoice> ByNozzle => ByModel.Where(item => Equals(item.Configuration.Machine.NozzleDiameter, nozzle.SelectedItem));
-
-    private void UpdateBrands(ReferenceChoice? preferred = null)
+    private void RefreshChoices(ReferenceChoice? preferred = null)
     {
-        SetChoices(brand, references.Select(item => item.Configuration.Machine.Brand).Distinct().Order(), preferred?.Configuration.Machine.Brand);
-        UpdateModels(preferred);
+        if (refreshing)
+            return;
+        refreshing = true;
+        try
+        {
+            var brands = references.Where(item => Matches(brand.Text, item.Configuration.Machine.Brand)).ToArray();
+            var models = brands.Where(item => Matches(model.Text, item.Configuration.Machine.Model)).ToArray();
+            var nozzles = models.Where(item => MatchesNozzle(nozzle.Text, item.Configuration.Machine.NozzleDiameter)).ToArray();
+            var matches = nozzles.Where(item => string.IsNullOrWhiteSpace(plate.Text) ||
+                item.Configuration.Plates.Any(value => Matches(plate.Text, value))).ToArray();
+
+            SetSuggestions(brand, references.Select(item => item.Configuration.Machine.Brand)
+                .Concat(["Anycubic", "Bambu Lab", "Creality", "Elegoo", "Original Prusa", "Qidi"]));
+            SetSuggestions(model, brands.Select(item => item.Configuration.Machine.Model));
+            SetSuggestions(nozzle, models.Select(item => item.Configuration.Machine.NozzleDiameter.ToString("G", CultureInfo.CurrentCulture))
+                .Concat(new[] { 0.2, 0.25, 0.4, 0.6, 0.8 }.Select(value => value.ToString("G", CultureInfo.CurrentCulture))));
+            SetSuggestions(plate, nozzles.SelectMany(item => item.Configuration.Plates)
+                .Concat(ReferenceConfiguration.PlateTemperatureKeys.Keys));
+
+            ReferenceChoice? selected = preferred ?? reference.SelectedItem as ReferenceChoice;
+            reference.Items.Clear();
+            reference.Items.AddRange(matches);
+            if (selected is not null)
+                reference.SelectedItem = selected;
+            if (reference.SelectedIndex < 0 && matches.Length > 0)
+                reference.SelectedIndex = 0;
+            reference.Enabled = matches.Length > 0;
+            status.Text = matches.Length == 0
+                ? T("Add a 3MF saved with this configuration, or clear a filter to see more references.",
+                    "Aggiungi un 3MF salvato con questa configurazione o svuota un filtro per vedere altri riferimenti.")
+                : "";
+            UpdateName();
+        }
+        finally { refreshing = false; }
     }
 
-    private void UpdateModels(ReferenceChoice? preferred = null)
-    {
-        SetChoices(model, ByBrand.Select(item => item.Configuration.Machine.Model).Distinct().Order(), preferred?.Configuration.Machine.Model);
-        UpdateNozzles(preferred);
-    }
+    private static bool Matches(string filter, string value) => string.IsNullOrWhiteSpace(filter) ||
+        filter.Trim().Equals(value, StringComparison.OrdinalIgnoreCase);
 
-    private void UpdateNozzles(ReferenceChoice? preferred = null)
-    {
-        SetChoices(nozzle, ByModel.Select(item => item.Configuration.Machine.NozzleDiameter).Distinct().Order(), preferred?.Configuration.Machine.NozzleDiameter);
-        UpdatePlates(preferred);
-    }
-
-    private void UpdatePlates(ReferenceChoice? preferred = null)
-    {
-        var matches = ByNozzle.ToArray();
-        SetChoices(plate, matches.SelectMany(item => Plates(item)).Distinct(),
-            (preferred ?? matches.FirstOrDefault())?.Configuration.CurrentPlate ?? "");
-        UpdateReferences(preferred);
-    }
-
-    private void UpdateReferences(ReferenceChoice? preferred = null)
-    {
-        SetChoices(reference, ByNozzle.Where(item => plate.SelectedItem is string selected && Plates(item).Contains(selected)), preferred);
-        UpdateName();
-    }
-
-    private static IReadOnlyList<string> Plates(ReferenceChoice item) =>
-        item.Configuration.CurrentPlate is null
-            ? ["", .. item.Configuration.Plates]
-            : item.Configuration.Plates;
+    private static bool MatchesNozzle(string filter, double diameter) => string.IsNullOrWhiteSpace(filter) ||
+        ProcessSettings.TryNumber(filter.Trim().Replace(',', '.'), out double value) && value == diameter;
 
     private void UpdateName()
     {
@@ -228,21 +226,23 @@ internal sealed class ProfileCreationForm : Form
         nameHint.Text = duplicate ? T("Choose a different name.", "Scegli un altro nome.") : "";
     }
 
-    private static ComboBox Picker() => new()
+    private static ComboBox Picker(bool editable = false) => new()
     {
-        Dock = DockStyle.Fill, DropDownStyle = ComboBoxStyle.DropDownList, FormattingEnabled = true,
+        Dock = DockStyle.Fill, DropDownStyle = editable ? ComboBoxStyle.DropDown : ComboBoxStyle.DropDownList,
         BackColor = Input, ForeColor = Ink
     };
 
-    private static void SetChoices<TValue>(ComboBox picker, IEnumerable<TValue> choices, object? preferred)
+    private static void SetSuggestions(ComboBox picker, IEnumerable<string> choices)
     {
+        string[] options = choices.Distinct(StringComparer.OrdinalIgnoreCase).Order().ToArray();
+        if (picker.Items.Cast<string>().SequenceEqual(options))
+            return;
+        string text = picker.Text;
+        int caret = picker.SelectionStart;
         picker.Items.Clear();
-        picker.Items.AddRange(choices.Cast<object>().ToArray());
-        if (preferred is not null)
-            picker.SelectedItem = preferred;
-        if (picker.SelectedIndex < 0 && picker.Items.Count > 0)
-            picker.SelectedIndex = 0;
-        picker.Enabled = picker.Items.Count > 0;
+        picker.Items.AddRange(options);
+        picker.Text = text;
+        picker.SelectionStart = Math.Min(caret, text.Length);
     }
 
     protected override void OnFormClosing(FormClosingEventArgs args)

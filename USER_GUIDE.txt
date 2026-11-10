@@ -30,12 +30,12 @@ quick guide. The app saves your language and theme preferences.
 
 -Saving printer profiles
 
-Click Create profile, then New profile. Choose the printer brand, model, nozzle
-diameter, and build plate. The available options come from saved reference
-projects. Use Add from 3MF to load one or more additional projects exported with
-the printer and nozzle configurations you want to use. For references with
-multiple plate types and matching filament temperatures, the app also offers
-compatible plates.
+Click Create profile, then New profile. Choose or type the printer brand,
+model, nozzle diameter, and build plate to filter the available references.
+Leave any field blank to accept all values for that field. If no reference
+matches, use Add from 3MF to load a project saved with the required printer and
+nozzle in your slicer. If the reference supports multiple plate types, the app
+can use a compatible plate with temperatures for the reference's filaments.
 
 Choose a reference and a profile name, then click Save. The library keeps a copy
 under %LOCALAPPDATA%\3MFTranslator\references. Select it under Profile when
