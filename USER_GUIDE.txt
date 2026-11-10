@@ -2,10 +2,10 @@
 
 -Getting started
 
-On Windows, open bin/Release/app/3MFTranslator.exe after building the app.
+On Windows, open bin/Release/latest/3MFTranslator.exe after building the app.
 To build it, install the .NET 10 SDK and run this command from the repository root.
 
-    dotnet build -c Release -o bin/Release/app
+    dotnet build -c Release -o bin/Release/latest
 
 Use the selector in the upper-right corner to switch between English and Italian.
 The sun and moon switch changes the theme. The question mark opens the in-app
@@ -105,7 +105,7 @@ reference. The app removes source G-code and reports excluded custom settings.
 From the repository root, run the following command with new paths for the
 output project and report.
 
-    dotnet bin/Release/app/3MFTranslator.dll convert source.3mf reference.3mf translated.3mf report.txt
+    dotnet bin/Release/latest/3MFTranslator.dll convert source.3mf reference.3mf translated.3mf report.txt
 
 To select an embedded preset, add its archive path after the report path,
 for example Metadata/process_settings_1.config.

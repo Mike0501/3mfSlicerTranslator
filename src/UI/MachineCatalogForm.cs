@@ -10,8 +10,8 @@ internal sealed class MachineCatalogForm : Form
     private readonly ComboBox model = Picker();
     private readonly ComboBox nozzle = Picker();
     private readonly ComboBox plate = Picker();
-    private readonly NumericUpDown slots = new() { Minimum = 1, Maximum = 4, Value = 1, Dock = DockStyle.Fill };
-    private readonly TextBox name = new() { MaxLength = 60, Dock = DockStyle.Fill, BackColor = Input, ForeColor = Ink };
+    private readonly NumericUpDown slots = new() { Minimum = 1, Maximum = 4, Value = 1, BorderStyle = BorderStyle.None, BackColor = Input, ForeColor = Ink };
+    private readonly TextBox name = new() { MaxLength = 60, BorderStyle = BorderStyle.None, BackColor = Input, ForeColor = Ink };
     private readonly Label status = new() { AutoSize = true, MaximumSize = new Size(480, 0), ForeColor = Muted };
     private readonly Label presets = new() { AutoSize = true, MaximumSize = new Size(480, 0), ForeColor = Muted };
     private readonly Label orcaStatus = new() { AutoSize = true, MaximumSize = new Size(480, 0), ForeColor = Muted };
@@ -35,42 +35,49 @@ internal sealed class MachineCatalogForm : Form
         BackColor = Canvas;
         ForeColor = Ink;
         Font = new Font("Segoe UI", 10F);
-        ClientSize = new Size(590, 510);
-        MinimumSize = new Size(540, 510);
+        ClientSize = new Size(600, 585);
+        MinimumSize = new Size(550, 500);
         MinimizeBox = false;
         ShowInTaskbar = false;
-        var layout = new TableLayoutPanel { ColumnCount = 2, Dock = DockStyle.Fill, Padding = new Padding(16) };
-        layout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        var layout = new TableLayoutPanel
+        {
+            ColumnCount = 1, RowCount = 4, Dock = DockStyle.Fill, Padding = new Padding(16), AutoScroll = true
+        };
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        layout.Controls.Add(new Label
+        {
+            Text = T("New printer profile", "Nuovo profilo stampante"),
+            AutoSize = true, Font = new Font("Segoe UI Semibold", 18F), Margin = new Padding(0, 0, 0, 10)
+        }, 0, 0);
+        var connection = Card(1, 1);
+        var fields = Card(2, 2);
+        fields.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        fields.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         var guidance = new Label
         {
             AutoSize = true, MaximumSize = new Size(490, 0),
             Text = T("To create a custom profile from the Orca catalog, connect OrcaSlicer (installed or portable). An existing 3MF reference can be used on its own.",
                 "Per creare un profilo personalizzato dal catalogo Orca, collega OrcaSlicer (installato o portatile). Puoi usare un 3MF di riferimento già pronto anche da solo.")
         };
-        layout.Controls.Add(guidance, 0, 0);
-        layout.SetColumnSpan(guidance, 2);
-        layout.Controls.Add(orcaStatus, 0, 1);
-        layout.SetColumnSpan(orcaStatus, 2);
+        connection.Controls.Add(guidance, 0, 0);
+        connection.Controls.Add(orcaStatus, 0, 1);
         var locations = new FlowLayoutPanel { AutoSize = true, Dock = DockStyle.Fill };
         locations.Controls.AddRange([connectOrca, browse]);
-        layout.Controls.Add(locations, 0, 2);
-        layout.SetColumnSpan(locations, 2);
-        AddField(T("Printer brand", "Marchio stampante"), brand, 3);
-        AddField(T("Printer model", "Modello stampante"), model, 4);
-        AddField(T("Nozzle preset", "Preset ugello"), nozzle, 5);
-        AddField(T("Build plate", "Piatto di stampa"), plate, 6);
-        AddField(T("Filament slots", "Slot filamento"), slots, 7);
-        AddField(T("Profile name", "Nome del profilo"), name, 8);
-        layout.Controls.Add(presets, 0, 9);
-        layout.SetColumnSpan(presets, 2);
-        layout.Controls.Add(status, 0, 10);
-        layout.SetColumnSpan(status, 2);
+        connection.Controls.Add(locations, 0, 2);
+        AddField(T("Printer brand", "Marchio stampante"), brand, 0);
+        AddField(T("Printer model", "Modello stampante"), model, 1);
+        AddField(T("Nozzle preset", "Preset ugello"), nozzle, 2);
+        AddField(T("Build plate", "Piatto di stampa"), plate, 3);
+        AddField(T("Filament slots", "Slot filamento"), slots, 4);
+        AddField(T("Profile name", "Nome del profilo"), name, 5);
+        fields.Controls.Add(presets, 0, 6);
+        fields.SetColumnSpan(presets, 2);
+        fields.Controls.Add(status, 0, 7);
+        fields.SetColumnSpan(status, 2);
         var cancel = new RoundedButton { Text = T("Cancel", "Annulla"), DialogResult = DialogResult.Cancel };
         var actions = new FlowLayoutPanel { Dock = DockStyle.Bottom, AutoSize = true, FlowDirection = FlowDirection.RightToLeft };
         actions.Controls.AddRange([save, cancel]);
-        layout.Controls.Add(actions, 0, 11);
-        layout.SetColumnSpan(actions, 2);
+        layout.Controls.Add(actions, 0, 3);
         Controls.Add(layout);
         AcceptButton = save;
         CancelButton = cancel;
@@ -102,11 +109,32 @@ internal sealed class MachineCatalogForm : Form
         };
         UpdateSave();
 
+        TableLayoutPanel Card(int row, int columns)
+        {
+            var card = new RoundedPanel(() => Surface)
+            {
+                Dock = DockStyle.Top, AutoSize = true, Padding = new Padding(13), Margin = new Padding(0, 0, 0, 10)
+            };
+            var content = new TableLayoutPanel
+            {
+                ColumnCount = columns, Dock = DockStyle.Top, AutoSize = true, Margin = Padding.Empty, BackColor = Color.Transparent
+            };
+            card.Controls.Add(content);
+            layout.Controls.Add(card, 0, row);
+            return content;
+        }
+
         void AddField(string label, Control field, int row)
         {
             field.AccessibleName = label;
-            layout.Controls.Add(new Label { Text = label, AutoSize = true, Anchor = AnchorStyles.Left }, 0, row);
-            layout.Controls.Add(field, 1, row);
+            var inset = new RoundedPanel(() => Input, radius: 8)
+            {
+                Dock = DockStyle.Fill, AutoSize = true, Padding = new Padding(8, 4, 8, 4)
+            };
+            field.Dock = DockStyle.Top;
+            inset.Controls.Add(field);
+            fields.Controls.Add(new Label { Text = label, AutoSize = true, Anchor = AnchorStyles.Left }, 0, row);
+            fields.Controls.Add(inset, 1, row);
         }
     }
 
@@ -224,10 +252,27 @@ internal sealed class MachineCatalogForm : Form
             $"{brand.Items.Count} marchi · {models} modelli · {slicers}");
     }
 
-    private static ComboBox Picker() => new()
+    private static ComboBox Picker()
     {
-        Dock = DockStyle.Fill, DropDownStyle = ComboBoxStyle.DropDownList, BackColor = Input, ForeColor = Ink
-    };
+        var picker = new ComboBox
+        {
+            DropDownStyle = ComboBoxStyle.DropDownList, DrawMode = DrawMode.OwnerDrawFixed,
+            FlatStyle = FlatStyle.Flat, BackColor = Input, ForeColor = Ink
+        };
+        picker.DrawItem += (_, args) =>
+        {
+            bool highlighted = (args.State & DrawItemState.Selected) != 0 &&
+                (args.State & DrawItemState.ComboBoxEdit) == 0;
+            using var background = new SolidBrush(highlighted ? AccentLight : Input);
+            args.Graphics.FillRectangle(background, args.Bounds);
+            if (args.Index >= 0)
+                TextRenderer.DrawText(args.Graphics, picker.GetItemText(picker.Items[args.Index]), picker.Font,
+                    Rectangle.Inflate(args.Bounds, -3, 0), picker.Enabled ? Ink : Muted,
+                    TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
+            args.DrawFocusRectangle();
+        };
+        return picker;
+    }
 
     private static void Populate<T>(ComboBox picker, IEnumerable<T> options)
     {
@@ -235,6 +280,12 @@ internal sealed class MachineCatalogForm : Form
         picker.Items.AddRange(options.Cast<object>().ToArray());
         if (picker.Items.Count > 0)
             picker.SelectedIndex = 0;
+    }
+
+    protected override void OnHandleCreated(EventArgs args)
+    {
+        base.OnHandleCreated(args);
+        ApplyTitleBar(Handle);
     }
 
     protected override void OnFormClosing(FormClosingEventArgs args)
