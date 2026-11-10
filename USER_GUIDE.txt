@@ -1,8 +1,7 @@
 3mfSlicerTranslator User Guide
-==============================
 
-Getting started
----------------
+-Getting started
+
 On Windows, open bin/Release/esito/3MFTranslator.exe after building the app.
 To build it, install the .NET 10 SDK and run this command from the repository root.
 
@@ -12,8 +11,8 @@ Use the selector in the upper-right corner to switch between English and Italian
 The sun and moon switch changes the theme. The question mark opens the in-app
 quick guide. The app saves your language and theme preferences.
 
-Converting a project
---------------------
+-Converting a project
+
 1. Click Browse and choose the source 3MF. Under Source settings to import,
    use its active settings or select an embedded process preset. The app uses
    the active settings for fields missing from the selected preset.
@@ -29,8 +28,8 @@ Converting a project
    3MF as a project in the destination slicer, slice it, and check the preview.
    Check that the model fits if the build plate size has changed.
 
-Saving printer profiles
------------------------
+-Saving printer profiles
+
 Click Create profile, then Add from 3MF, and choose a project saved in a supported
 destination slicer. The library keeps a copy under
 %LOCALAPPDATA%\3MFTranslator\references. Select it under Profile when converting.
@@ -46,8 +45,8 @@ References added with an earlier version still use their original saved paths.
 Use Convert to 3MF to migrate an older local preset, or migrate it on first use.
 Migration requires the original slicer and its presets.
 
-Compatibility
--------------
+-Compatibility
+
 Bambu Studio, OrcaSlicer, and Anycubic Slicer Next can be used as both sources
 and destinations. The destination requires an FFF nozzle. The app can adapt a
 multi-nozzle Bambu or Orca project when all source nozzles match the diameter of
@@ -71,8 +70,8 @@ print speeds, and accelerations. The printer configuration, machine limits,
 temperatures, filament profiles, and purging settings come from the destination
 reference. The app removes source G-code and reports excluded custom settings.
 
-Command-line usage
-------------------
+-Command-line usage
+
 From the repository root, run the following command with new paths for the
 output project and report.
 
