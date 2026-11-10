@@ -14,6 +14,8 @@ internal sealed class MachineCatalogForm : Form
     private readonly TextBox name = new() { MaxLength = 60, Dock = DockStyle.Fill, BackColor = Input, ForeColor = Ink };
     private readonly Label status = new() { AutoSize = true, MaximumSize = new Size(480, 0), ForeColor = Muted };
     private readonly Label presets = new() { AutoSize = true, MaximumSize = new Size(480, 0), ForeColor = Muted };
+    private readonly Label orcaStatus = new() { AutoSize = true, MaximumSize = new Size(480, 0), ForeColor = Muted };
+    private readonly RoundedButton connectOrca = new() { Text = T("Connect OrcaSlicer…", "Collega OrcaSlicer…") };
     private readonly RoundedButton browse = new() { Text = T("Locate slicer…", "Trova slicer…") };
     private readonly RoundedButton save = new(primary: true) { Text = T("Save", "Salva"), DialogResult = DialogResult.OK };
     private readonly HashSet<string> names;
@@ -33,28 +35,41 @@ internal sealed class MachineCatalogForm : Form
         BackColor = Canvas;
         ForeColor = Ink;
         Font = new Font("Segoe UI", 10F);
-        ClientSize = new Size(550, 440);
-        MinimumSize = new Size(500, 390);
+        ClientSize = new Size(590, 510);
+        MinimumSize = new Size(540, 510);
         MinimizeBox = false;
         ShowInTaskbar = false;
         var layout = new TableLayoutPanel { ColumnCount = 2, Dock = DockStyle.Fill, Padding = new Padding(16) };
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        layout.Controls.Add(browse, 1, 0);
-        AddField(T("Printer brand", "Marchio stampante"), brand, 1);
-        AddField(T("Printer model", "Modello stampante"), model, 2);
-        AddField(T("Nozzle preset", "Preset ugello"), nozzle, 3);
-        AddField(T("Build plate", "Piatto di stampa"), plate, 4);
-        AddField(T("Filament slots", "Slot filamento"), slots, 5);
-        AddField(T("Profile name", "Nome del profilo"), name, 6);
-        layout.Controls.Add(presets, 0, 7);
+        var guidance = new Label
+        {
+            AutoSize = true, MaximumSize = new Size(490, 0),
+            Text = T("To create a custom profile from the Orca catalog, connect OrcaSlicer (installed or portable). An existing 3MF reference can be used on its own.",
+                "Per creare un profilo personalizzato dal catalogo Orca, collega OrcaSlicer (installato o portatile). Puoi usare un 3MF di riferimento già pronto anche da solo.")
+        };
+        layout.Controls.Add(guidance, 0, 0);
+        layout.SetColumnSpan(guidance, 2);
+        layout.Controls.Add(orcaStatus, 0, 1);
+        layout.SetColumnSpan(orcaStatus, 2);
+        var locations = new FlowLayoutPanel { AutoSize = true, Dock = DockStyle.Fill };
+        locations.Controls.AddRange([connectOrca, browse]);
+        layout.Controls.Add(locations, 0, 2);
+        layout.SetColumnSpan(locations, 2);
+        AddField(T("Printer brand", "Marchio stampante"), brand, 3);
+        AddField(T("Printer model", "Modello stampante"), model, 4);
+        AddField(T("Nozzle preset", "Preset ugello"), nozzle, 5);
+        AddField(T("Build plate", "Piatto di stampa"), plate, 6);
+        AddField(T("Filament slots", "Slot filamento"), slots, 7);
+        AddField(T("Profile name", "Nome del profilo"), name, 8);
+        layout.Controls.Add(presets, 0, 9);
         layout.SetColumnSpan(presets, 2);
-        layout.Controls.Add(status, 0, 8);
+        layout.Controls.Add(status, 0, 10);
         layout.SetColumnSpan(status, 2);
         var cancel = new RoundedButton { Text = T("Cancel", "Annulla"), DialogResult = DialogResult.Cancel };
         var actions = new FlowLayoutPanel { Dock = DockStyle.Bottom, AutoSize = true, FlowDirection = FlowDirection.RightToLeft };
         actions.Controls.AddRange([save, cancel]);
-        layout.Controls.Add(actions, 0, 9);
+        layout.Controls.Add(actions, 0, 11);
         layout.SetColumnSpan(actions, 2);
         Controls.Add(layout);
         AcceptButton = save;
@@ -70,7 +85,12 @@ internal sealed class MachineCatalogForm : Form
                 args.Value = ReferenceConfiguration.PlateLabel(value);
         };
         name.TextChanged += (_, _) => UpdateSave();
-        Shown += async (_, _) => await LoadMachines(LegacyProfileCatalog.InstalledSlicers().ToArray());
+        Shown += async (_, _) =>
+        {
+            orcaStatus.Text = T("Checking for OrcaSlicer…", "Ricerca di OrcaSlicer…");
+            await LoadMachines(LegacyProfileCatalog.InstalledSlicers().ToArray());
+        };
+        connectOrca.Click += async (_, _) => await ConnectOrca();
         browse.Click += async (_, _) =>
         {
             using var picker = new OpenFileDialog
@@ -90,9 +110,30 @@ internal sealed class MachineCatalogForm : Form
         }
     }
 
+    private async Task ConnectOrca()
+    {
+        using var picker = new FolderBrowserDialog
+        {
+            Description = T("Choose the folder containing orca-slicer.exe.", "Scegli la cartella che contiene orca-slicer.exe."),
+            UseDescriptionForTitle = true,
+            ShowNewFolderButton = false
+        };
+        if (picker.ShowDialog(this) != DialogResult.OK)
+            return;
+        string executable = Path.Combine(picker.SelectedPath, "orca-slicer.exe");
+        if (!File.Exists(executable))
+        {
+            status.Text = T("This folder does not contain orca-slicer.exe. Choose the installation folder or the extracted portable folder.",
+                "Questa cartella non contiene orca-slicer.exe. Scegli la cartella di installazione o quella della versione portatile estratta.");
+            return;
+        }
+        await LoadMachines([executable], remember: true);
+    }
+
     private async Task LoadMachines(string[] paths, bool remember = false)
     {
         UseWaitCursor = true;
+        connectOrca.Enabled = false;
         browse.Enabled = false;
         UpdateSave();
         status.Text = T("Reading slicer presets…", "Lettura dei preset degli slicer…");
@@ -102,7 +143,11 @@ internal sealed class MachineCatalogForm : Form
             foreach (string path in paths)
             {
                 if (loaded.Contains(path))
+                {
+                    if (remember)
+                        LegacyProfileCatalog.RememberSlicerLocation(path);
                     continue;
+                }
                 try
                 {
                     CatalogMachine[] entries = await Task.Run(() => LegacyProfileCatalog.ReadMachines(path));
@@ -130,7 +175,12 @@ internal sealed class MachineCatalogForm : Form
         finally
         {
             UseWaitCursor = false;
+            connectOrca.Enabled = true;
             browse.Enabled = true;
+            orcaStatus.Text = machines.Any(machine => machine.Catalog.SlicerName == "OrcaSlicer")
+                ? T("OrcaSlicer connected.", "OrcaSlicer collegato.")
+                : T("OrcaSlicer catalog unavailable. Use Connect OrcaSlicer to select its folder.",
+                    "Catalogo OrcaSlicer non disponibile. Usa Collega OrcaSlicer per selezionare la cartella.");
             UpdateSave();
         }
     }

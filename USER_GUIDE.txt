@@ -41,11 +41,16 @@ the slicer's process and filament presets to export a complete reference 3MF.
 Select the saved profile under Profile when converting. The saved reference
 continues to work if the original slicer is removed.
 
-The catalog uses compatible JSON presets from OrcaSlicer, Anycubic Slicer Next,
-or Bambu Studio installations. Use Locate slicer to select a portable or
-nonstandard installation. Available models and nozzle sizes depend on the
-installed presets. For machines missing from the catalog, save a project in
-the destination slicer and use the reference workflow below.
+To create a custom profile from the Orca catalog, connect an installed or
+portable copy of OrcaSlicer. The app checks common installation paths and
+previously linked locations. If the Orca catalog is unavailable, click
+Connect OrcaSlicer and choose the folder containing orca-slicer.exe. The app
+remembers a location after loading compatible presets from it.
+
+The catalog also reads compatible JSON presets from Anycubic Slicer Next and
+Bambu Studio. Use Locate slicer for their nonstandard locations. Available
+models and nozzle sizes depend on the installed presets. For other machines,
+use the 3MF reference workflow below.
 
 Click Create profile, then From a 3MF reference. Choose or type the printer brand,
 model, nozzle diameter, and build plate to filter the available references.
