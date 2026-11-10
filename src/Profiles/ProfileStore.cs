@@ -3,7 +3,8 @@ using System.Text.Json;
 namespace Translator;
 
 internal sealed record DestinationProfile(string Name, string Printer, string Process, string Filament,
-    string Bed, decimal LayerHeight, int Slots, string? ReferencePath = null, PrintPreset? Preset = null)
+    string Bed, decimal LayerHeight, int Slots, string? ReferencePath = null, PrintPreset? Preset = null,
+    ReferenceMachine? Machine = null)
 {
     public override string ToString() => string.IsNullOrWhiteSpace(Name) ? Printer : Name;
 }
@@ -19,7 +20,8 @@ internal static class ProfileStore
     internal static DirectoryInfo CreateMigrationFolder() =>
         Directory.CreateDirectory(Path.Combine(Path.GetDirectoryName(StorePath)!, "migration", Guid.NewGuid().ToString("N")));
 
-    internal static DestinationProfile ImportReference(string name, string source, DestinationProfile? previous = null)
+    internal static DestinationProfile ImportReference(string name, string source, DestinationProfile? previous = null,
+        ReferenceMachine? machine = null, string? buildPlate = null)
     {
         // Validate the archive before creating a copy, and use the saved copy as the source of profile metadata.
         _ = ProjectConverter.GetReferencePrinter(source);
@@ -32,10 +34,12 @@ internal static class ProfileStore
             using (FileStream input = File.OpenRead(source))
             using (var output = new FileStream(path, FileMode.CreateNew, FileAccess.Write))
                 input.CopyTo(output);
-            string printer = ProjectConverter.GetReferencePrinter(path);
+            ReferenceConfiguration reference = ProjectConverter.PrepareReferenceCopy(path, machine, buildPlate);
+            string printer = reference.Machine.Preset;
+            string plate = reference.CurrentPlate ?? "";
             var profile = previous is null
-                ? new DestinationProfile(name, printer, "", "", "", 0, 0, path)
-                : previous with { Printer = printer, ReferencePath = path };
+                ? new DestinationProfile(name, printer, "", "", plate, 0, 0, path, Machine: reference.Machine)
+                : previous with { Printer = printer, ReferencePath = path, Bed = plate, Machine = reference.Machine };
 
             Save(profile, previous);
             saved = true;

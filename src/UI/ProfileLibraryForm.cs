@@ -61,7 +61,7 @@ internal sealed class ProfileLibraryForm : Form
         status.Margin = new Padding(3, 8, 3, 3);
         layout.Controls.Add(status, 0, 3);
 
-        var add = new RoundedButton { Text = T("Add from 3MF…", "Aggiungi da 3MF…") };
+        var add = new RoundedButton { Text = T("New profile…", "Nuovo profilo…") };
         var close = new RoundedButton { Text = T("Close", "Chiudi"), DialogResult = DialogResult.Cancel };
         actions.Controls.AddRange([add, migrate, customize]);
         if (!saveOnly)
@@ -77,7 +77,7 @@ internal sealed class ProfileLibraryForm : Form
         CancelButton = close;
         profiles.SelectedIndexChanged += (_, _) => UpdateDetails();
         profiles.DoubleClick += async (_, _) => { if (!saveOnly) await UseSelected(); };
-        add.Click += async (_, _) => await AddReference();
+        add.Click += async (_, _) => await CreateProfile();
         customize.Click += async (_, _) => await CustomizePreset();
         migrate.Click += async (_, _) =>
         {
@@ -108,11 +108,21 @@ internal sealed class ProfileLibraryForm : Form
         customize.Visible = profiles.SelectedItem is DestinationProfile { ReferencePath: not null };
         details.Text = profiles.SelectedItem is not DestinationProfile profile
             ? T("Add a reference project to create your first profile.", "Aggiungi un progetto di riferimento per creare il primo profilo.")
-            : profile.Printer + Environment.NewLine + Environment.NewLine + (profile.ReferencePath is string path
+            : DescribePrinter(profile) + Environment.NewLine + Environment.NewLine + (profile.ReferencePath is string path
                 ? (profile.Preset is null ? T("Base preset", "Preset base") : T("Custom preset", "Preset personalizzato"))
                     + Environment.NewLine + T("Reference 3MF", "Riferimento 3MF") + Environment.NewLine + path
                 : T("Saved preset from an earlier version. It can be converted into a reusable 3MF profile.",
                     "Preset salvato con una versione precedente. Puoi convertirlo in un profilo 3MF riutilizzabile."));
+    }
+
+    private static string DescribePrinter(DestinationProfile profile)
+    {
+        if (profile.Machine is not ReferenceMachine machine)
+            return profile.Printer;
+        string plate = profile.Bed.Length == 0 ? T("Reference default", "Predefinito del riferimento") : profile.Bed;
+        return string.Join(Environment.NewLine, machine.Model,
+            T($"Nozzle · {machine.NozzleDiameter} mm", $"Ugello · {machine.NozzleDiameter} mm"),
+            T($"Build plate · {plate}", $"Piatto · {plate}"));
     }
 
     private async Task CustomizePreset()
@@ -140,31 +150,19 @@ internal sealed class ProfileLibraryForm : Form
         catch (Exception error) { status.Text = error.Message; }
     }
 
-    private async Task AddReference()
+    private async Task CreateProfile()
     {
-        using var file = new OpenFileDialog
-        {
-            Title = T("Choose a reference project", "Scegli un progetto di riferimento"),
-            Filter = T("3MF project (*.3mf)|*.3mf", "Progetto 3MF (*.3mf)|*.3mf"), CheckFileExists = true
-        };
-        if (file.ShowDialog(this) != DialogResult.OK)
+        using var editor = new ProfileCreationForm(profiles.Items.OfType<DestinationProfile>().ToArray()) { Icon = Icon };
+        if (editor.ShowDialog(this) != DialogResult.OK || editor.ReferencePath is not string path ||
+            editor.Machine is not ReferenceMachine machine)
             return;
-        try
-        {
-            string stem = Path.GetFileNameWithoutExtension(file.FileName);
-            var usedNames = profiles.Items.OfType<DestinationProfile>().Select(item => item.Name).ToHashSet(StringComparer.CurrentCultureIgnoreCase);
-            using var name = new ProfileNameForm(stem, usedNames) { Icon = Icon };
-            if (name.ShowDialog(this) != DialogResult.OK)
-                return;
 
-            string profileName = name.ProfileName;
-            string path = file.FileName;
-            _ = await SaveProfile(
-                () => Task.Run(() => ProfileStore.ImportReference(profileName, path)),
-                T("Saving the reference…", "Salvataggio del riferimento…"),
-                T("Profile saved with a copy of the reference.", "Profilo salvato con una copia del riferimento."));
-        }
-        catch (Exception error) { status.Text = error.Message; }
+        string name = editor.ProfileName;
+        string? plate = editor.BuildPlate;
+        _ = await SaveProfile(
+            () => Task.Run(() => ProfileStore.ImportReference(name, path, machine: machine, buildPlate: plate)),
+            T("Saving the reference…", "Salvataggio del riferimento…"),
+            T("Profile saved with a copy of the reference.", "Profilo salvato con una copia del riferimento."));
     }
 
     private async Task UseSelected()
@@ -239,51 +237,5 @@ internal sealed class ProfileLibraryForm : Form
         base.OnFormClosing(args);
         if (UseWaitCursor && args.CloseReason == CloseReason.UserClosing)
             args.Cancel = true;
-    }
-}
-
-internal sealed class ProfileNameForm : Form
-{
-    private readonly TextBox name = new() { Dock = DockStyle.Top, MaxLength = 60 };
-    internal string ProfileName => name.Text.Trim();
-
-    internal ProfileNameForm(string suggestion, IReadOnlySet<string> usedNames)
-    {
-        Text = T("Name the profile", "Assegna un nome al profilo");
-        StartPosition = FormStartPosition.CenterParent;
-        AutoScaleMode = AutoScaleMode.Dpi;
-        Font = new Font("Segoe UI", 10F);
-        FormBorderStyle = FormBorderStyle.FixedDialog;
-        BackColor = Canvas;
-        ForeColor = Ink;
-        ClientSize = new Size(430, 155);
-        ShowInTaskbar = false;
-        MinimizeBox = false;
-        MaximizeBox = false;
-
-        name.AccessibleName = T("Profile name", "Nome del profilo");
-        name.Text = suggestion[..Math.Min(60, suggestion.Length)];
-        var save = new RoundedButton(primary: true) { Text = T("Save", "Salva"), DialogResult = DialogResult.OK };
-        var cancel = new RoundedButton { Text = T("Cancel", "Annulla"), DialogResult = DialogResult.Cancel };
-        var hint = new Label { AutoSize = true, ForeColor = Muted };
-        void UpdateName()
-        {
-            bool alreadyUsed = usedNames.Contains(ProfileName);
-            save.Enabled = ProfileName.Length > 0 && !alreadyUsed;
-            hint.Text = alreadyUsed ? T("Choose a different name.", "Scegli un altro nome.") : "";
-        }
-        name.TextChanged += (_, _) => UpdateName();
-        UpdateName();
-        var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, Padding = new Padding(15) };
-        layout.Controls.Add(new Label { Text = name.AccessibleName, AutoSize = true });
-        layout.Controls.Add(name);
-        layout.Controls.Add(hint);
-        var actions = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, FlowDirection = FlowDirection.RightToLeft };
-        actions.Controls.AddRange([save, cancel]);
-        layout.Controls.Add(actions);
-        Controls.Add(layout);
-        AcceptButton = save;
-        CancelButton = cancel;
-        ActiveControl = name;
     }
 }

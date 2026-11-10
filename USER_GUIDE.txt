@@ -2,10 +2,10 @@
 
 -Getting started
 
-On Windows, open bin/Release/esito/3MFTranslator.exe after building the app.
+On Windows, open bin/Release/app/3MFTranslator.exe after building the app.
 To build it, install the .NET 10 SDK and run this command from the repository root.
 
-    dotnet build -c Release -o bin/Release/esito
+    dotnet build -c Release -o bin/Release/app
 
 Use the selector in the upper-right corner to switch between English and Italian.
 The sun and moon switch changes the theme. The question mark opens the in-app
@@ -30,10 +30,17 @@ quick guide. The app saves your language and theme preferences.
 
 -Saving printer profiles
 
-Click Create profile, then Add from 3MF, and choose a project saved in a supported
-destination slicer. The library keeps a copy under
-%LOCALAPPDATA%\3MFTranslator\references. Select it under Profile when converting.
-You can create and use these profiles without the slicer that generated the 3MF.
+Click Create profile, then New profile. Choose the printer brand, model, nozzle
+diameter, and build plate. The available options come from saved reference
+projects. Use Add from 3MF to load one or more additional projects exported with
+the printer and nozzle configurations you want to use. For references with
+multiple plate types and matching filament temperatures, the app also offers
+compatible plates.
+
+Choose a reference and a profile name, then click Save. The library keeps a copy
+under %LOCALAPPDATA%\3MFTranslator\references. Select it under Profile when
+converting. You can create and use these profiles without the slicer that
+generated the 3MF.
 
 Each reference serves as a base preset. Select it and click Customize to save a
 variant with a different layer height, wall count, sparse infill density, or
@@ -75,7 +82,7 @@ reference. The app removes source G-code and reports excluded custom settings.
 From the repository root, run the following command with new paths for the
 output project and report.
 
-    dotnet bin/Release/esito/3MFTranslator.dll convert source.3mf reference.3mf translated.3mf report.txt
+    dotnet bin/Release/app/3MFTranslator.dll convert source.3mf reference.3mf translated.3mf report.txt
 
 To select an embedded preset, add its archive path after the report path,
 for example Metadata/process_settings_1.config.

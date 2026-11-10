@@ -10,13 +10,6 @@ internal sealed record SlicerPreset(string Name, JsonObject Settings);
 
 internal sealed class LegacyProfileCatalog
 {
-    private static readonly Dictionary<string, string> BedTemperatures = new(StringComparer.Ordinal)
-    {
-        ["Textured PEI Plate"] = "textured_plate_temp",
-        ["High Temp Plate"] = "hot_plate_temp",
-        ["Cool Plate"] = "cool_plate_temp",
-        ["Engineering Plate"] = "eng_plate_temp"
-    };
     private readonly string installation;
     private readonly Dictionary<string, SlicerPreset> printers;
     private readonly Dictionary<string, SlicerPreset> processes;
@@ -47,7 +40,7 @@ internal sealed class LegacyProfileCatalog
 
     private static bool SupportsBed(SlicerPreset printer, SlicerPreset filament, string bed) =>
         bed.Length == 0 || (Text(printer.Settings, "support_multi_bed_types") == "1" &&
-            BedTemperatures.TryGetValue(bed, out string? temperature) &&
+            ReferenceConfiguration.PlateTemperatureKeys.TryGetValue(bed, out string? temperature) &&
             HasBedTemperature(filament.Settings, temperature) &&
             HasBedTemperature(filament.Settings, temperature + "_initial_layer"));
 

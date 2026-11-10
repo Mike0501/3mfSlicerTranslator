@@ -78,6 +78,40 @@ internal static class ProjectConverter
         return printer;
     }
 
+    internal static ReferenceConfiguration ReadReferenceConfiguration(string path) =>
+        ReadReferenceConfiguration(ReadReferenceSettings(path));
+
+    internal static ReferenceConfiguration PrepareReferenceCopy(string path, ReferenceMachine? expectedMachine,
+        string? buildPlate)
+    {
+        JsonObject settings = ReadReferenceSettings(path);
+        ReferenceConfiguration configuration = ReadReferenceConfiguration(settings);
+        if (expectedMachine is not null && expectedMachine != configuration.Machine)
+            throw new InvalidDataException(T("The reference printer or nozzle has changed. Choose the reference again.",
+                "La stampante o l’ugello del riferimento sono cambiati. Scegli di nuovo il riferimento."));
+        if (buildPlate is null || buildPlate == configuration.CurrentPlate)
+            return configuration;
+        if (!configuration.Plates.Contains(buildPlate))
+            throw new InvalidDataException(T("The selected build plate is unavailable for this reference.",
+                "Il piatto scelto non è disponibile per questo riferimento."));
+
+        settings["curr_bed_type"] = buildPlate;
+        using var archive = ZipFile.Open(path, ZipArchiveMode.Update);
+        archive.Entries.Single(entry => entry.FullName.Equals(Settings, StringComparison.OrdinalIgnoreCase)).Delete();
+        WriteJson(archive, Settings, settings);
+        return configuration with { CurrentPlate = buildPlate };
+    }
+
+    private static JsonObject ReadReferenceSettings(string path)
+    {
+        using var reference = new ProjectArchive(path);
+        reference.Validate(T("reference", "modello"));
+        return reference.ReadSettings();
+    }
+
+    private static ReferenceConfiguration ReadReferenceConfiguration(JsonObject settings) =>
+        ReferenceConfiguration.Read(settings, ReadPrinterName(settings), ReadDestinationNozzle(settings));
+
     internal static (PrintPreset Values, LayerHeightRange Range) GetDestinationPreset(DestinationProfile profile)
     {
         if (profile.ReferencePath is not string path)
