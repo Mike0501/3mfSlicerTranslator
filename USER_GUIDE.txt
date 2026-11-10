@@ -74,14 +74,20 @@ References added with an earlier version still use their original saved paths.
 Use Convert to 3MF to migrate an older local preset, or migrate it on first use.
 Migration requires the original slicer and its presets.
 
--Compatibility
+Compatibility
 
-Bambu Studio, OrcaSlicer, and Anycubic Slicer Next can be used as both sources
-and destinations. The destination requires an FFF nozzle. The app can adapt a
-multi-nozzle Bambu or Orca project when all source nozzles match the diameter of
-the destination nozzle.
+Bambu Studio, OrcaSlicer, Anycubic Slicer Next, and Creality Print can be used
+as both sources and destinations. For Creality Print, save a reference project
+in Creality Print with the intended printer, nozzle, build plate, and enough
+filament slots. Use that reference in the desktop app or as reference.3mf on
+the command line. The converted project uses the machine settings from the
+reference and keeps its values when an imported setting is incompatible.
+If the build volume differs, check object placement and height before slicing.
 
-The app also imports PrusaSlicer 2.x and SuperSlicer projects with embedded
+The destination requires one physical FFF nozzle. The app can adapt a
+multi-nozzle source when all source nozzles match the destination diameter.
+
+The app also imports compatible PrusaSlicer 2.x and SuperSlicer projects with embedded
 geometry and settings, one build plate, and one filament. These imports include
 negative volumes, modifiers, instances, and compatible process settings. The
 report flags excluded variable layer heights, per-layer events, and height

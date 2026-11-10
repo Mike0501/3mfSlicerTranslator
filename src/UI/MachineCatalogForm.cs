@@ -14,7 +14,9 @@ internal sealed class MachineCatalogForm : Form
     private readonly TextBox name = new() { MaxLength = 60, BorderStyle = BorderStyle.None, BackColor = Input, ForeColor = Ink };
     private readonly Label status = new() { AutoSize = true, MaximumSize = new Size(480, 0), ForeColor = Muted };
     private readonly Label presets = new() { AutoSize = true, MaximumSize = new Size(480, 0), ForeColor = Muted };
-    private readonly Label orcaStatus = new() { AutoSize = true, MaximumSize = new Size(480, 0), ForeColor = Muted };
+    private bool orcaConnected;
+    private readonly RoundedPanel orcaStatusPanel;
+    private readonly Label orcaStatus = new() { AutoSize = true, MaximumSize = new Size(470, 0), Dock = DockStyle.Fill };
     private readonly RoundedButton connectOrca = new() { Text = T("Connect OrcaSlicer…", "Collega OrcaSlicer…") };
     private readonly RoundedButton browse = new() { Text = T("Locate slicer…", "Trova slicer…") };
     private readonly RoundedButton save = new(primary: true) { Text = T("Save", "Salva"), DialogResult = DialogResult.OK };
@@ -35,6 +37,11 @@ internal sealed class MachineCatalogForm : Form
         BackColor = Canvas;
         ForeColor = Ink;
         Font = new Font("Segoe UI", 10F);
+        orcaStatusPanel = new RoundedPanel(
+            () => orcaConnected ? ConversionDetailsForm.SuccessColors.Surface : ConversionDetailsForm.ErrorColors.Surface, radius: 8)
+        {
+            AutoSize = true, Dock = DockStyle.Top, Padding = new Padding(9), Margin = new Padding(0, 8, 0, 8)
+        };
         ClientSize = new Size(600, 585);
         MinimumSize = new Size(550, 500);
         MinimizeBox = false;
@@ -60,7 +67,8 @@ internal sealed class MachineCatalogForm : Form
                 "Per creare un profilo personalizzato dal catalogo Orca, collega OrcaSlicer (installato o portatile). Puoi usare un 3MF di riferimento già pronto anche da solo.")
         };
         connection.Controls.Add(guidance, 0, 0);
-        connection.Controls.Add(orcaStatus, 0, 1);
+        orcaStatusPanel.Controls.Add(orcaStatus);
+        connection.Controls.Add(orcaStatusPanel, 0, 1);
         var locations = new FlowLayoutPanel { AutoSize = true, Dock = DockStyle.Fill };
         locations.Controls.AddRange([connectOrca, browse]);
         connection.Controls.Add(locations, 0, 2);
@@ -203,12 +211,16 @@ internal sealed class MachineCatalogForm : Form
         finally
         {
             UseWaitCursor = false;
-            connectOrca.Enabled = true;
+            orcaConnected = machines.Any(machine => machine.Catalog.SlicerName == "OrcaSlicer");
+            connectOrca.Enabled = !orcaConnected;
             browse.Enabled = true;
-            orcaStatus.Text = machines.Any(machine => machine.Catalog.SlicerName == "OrcaSlicer")
-                ? T("OrcaSlicer connected.", "OrcaSlicer collegato.")
-                : T("OrcaSlicer catalog unavailable. Use Connect OrcaSlicer to select its folder.",
-                    "Catalogo OrcaSlicer non disponibile. Usa Collega OrcaSlicer per selezionare la cartella.");
+            var stateColors = orcaConnected ? ConversionDetailsForm.SuccessColors : ConversionDetailsForm.ErrorColors;
+            orcaStatus.ForeColor = stateColors.Ink;
+            orcaStatus.Text = orcaConnected
+                ? T("OrcaSlicer connected", "OrcaSlicer collegato")
+                : T("OrcaSlicer not connected · Use Connect OrcaSlicer to select its folder.",
+                    "OrcaSlicer non collegato · Usa Collega OrcaSlicer per selezionare la cartella.");
+            orcaStatusPanel.Invalidate();
             UpdateSave();
         }
     }

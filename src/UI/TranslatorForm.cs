@@ -77,7 +77,7 @@ internal sealed class TranslatorForm : Form
         body.Controls.Add(CreateWorkflow(), 0, 0);
         body.Controls.Add(CreateReport(), 1, 0);
         page.Controls.Add(body, 0, 1);
-        Label footer = Caption(T("Export to Bambu Studio · OrcaSlicer · Anycubic Slicer Next   |   Also imports from PrusaSlicer and SuperSlicer", "Destinazione Bambu Studio · OrcaSlicer · Anycubic Slicer Next   |   Importa anche da PrusaSlicer e SuperSlicer"), 9);
+        Label footer = Caption(T("Export to Bambu Studio · OrcaSlicer · Anycubic Slicer Next · Creality Print   |   Also imports from PrusaSlicer and SuperSlicer", "Destinazione Bambu Studio · OrcaSlicer · Anycubic Slicer Next · Creality Print   |   Importa anche da PrusaSlicer e SuperSlicer"), 9);
         footer.Margin = new Padding(26, 12, 26, 14);
         page.Controls.Add(footer, 0, 2);
         Controls.Add(page);

@@ -154,7 +154,8 @@ internal static class ProcessSettings
         node is JsonValue value && value.TryGetValue(out string? result) ? result : null;
 
     internal static List<string> Transfer(JsonObject source, JsonObject? preset, JsonObject target, int slots,
-        List<string> warnings, List<string> retained, (int Index, int Count)? variant = null, ReviewSettings? review = null)
+        List<string> warnings, List<string> retained, (int Index, int Count)? variant = null, ReviewSettings? review = null,
+        bool crealityDestination = false)
     {
         var transferred = new List<string>();
         var skipped = new List<string>();
@@ -180,7 +181,7 @@ internal static class ProcessSettings
                 preferred = selected;
                 preferredIndex = active.Index;
             }
-            JsonNode? translated = TranslateValue(key, preferred, target, slots);
+            JsonNode? translated = TranslateValue(key, preferred, target, slots, crealityDestination);
             if (review is null)
             {
                 if (translated is not null)
@@ -205,7 +206,7 @@ internal static class ProcessSettings
             {
                 for (int index = 0; index < variants.Count; index++)
                 {
-                    if (variants[index] is not JsonNode option || TranslateValue(key, option, target, slots) is not JsonNode candidate ||
+                    if (variants[index] is not JsonNode option || TranslateValue(key, option, target, slots, crealityDestination) is not JsonNode candidate ||
                         options.Any(item => JsonNode.DeepEquals(item.Value, candidate)))
                         continue;
                     options.Add(SourceOption(candidate, VariantName(names, index, variants.Count)));
@@ -262,7 +263,7 @@ internal static class ProcessSettings
         names?.Count == count && StringValue(names[index]) is string name
             ? name : T($"Variant {index + 1}", $"Variante {index + 1}");
 
-    private static JsonNode? TranslateValue(string key, JsonNode value, JsonObject target, int slots)
+    private static JsonNode? TranslateValue(string key, JsonNode value, JsonObject target, int slots, bool crealityDestination)
     {
         if (NumericOrPercent.Contains(key) && TryTransferNumeric(key, value, target, out JsonNode? numeric))
             return numeric;
@@ -273,7 +274,7 @@ internal static class ProcessSettings
             if (array.Any(item => StringValue(item) != scalar))
                 return null;
         }
-        if (scalar is null || !TryTranslate(key, scalar, target, slots, out string translated))
+        if (scalar is null || !TryTranslate(key, scalar, target, slots, out string translated, crealityDestination))
             return null;
         return target[key] is JsonArray targetValues
             ? new JsonArray(Enumerable.Range(0, targetValues.Count).Select(_ => (JsonNode?)JsonValue.Create(translated)).ToArray())
@@ -315,8 +316,19 @@ internal static class ProcessSettings
         target.ContainsKey(key) ? [key] :
         SettingAliases.TryGetValue(key, out string[]? aliases) ? aliases.Where(target.ContainsKey) : [];
 
-    internal static bool TryTranslate(string key, string value, JsonObject target, int slots, out string translatedValue)
+    internal static bool TryTranslate(string key, string value, JsonObject target, int slots, out string translatedValue,
+        bool crealityDestination)
     {
+        translatedValue = value;
+        if (crealityDestination && (key switch
+        {
+            "raft_first_layer_expansion" => TryNumber(value, out double expansion) && expansion < 0,
+            "tree_support_wall_count" => TryNumber(value, out double walls) && walls is < 0 or > 2,
+            "internal_solid_infill_pattern" or "ironing_pattern" or "support_ironing_pattern" => value == "rectilinear",
+            _ => false
+        }))
+            return false;
+
         translatedValue = (key, value) switch
         {
             ("support_type", "normal") => "normal(manual)",

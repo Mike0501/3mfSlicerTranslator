@@ -54,8 +54,8 @@ internal sealed class QuickGuideForm : Form
             T("Open Result details… to see errors in red, warnings in yellow and completed operations in green. Open the translated 3MF as a project in the destination slicer, slice it and check the preview before printing.",
               "Apri Dettagli esito… per vedere gli errori in rosso, gli avvisi in giallo e le operazioni riuscite in verde. Apri il 3MF tradotto come progetto nello slicer di destinazione, esegui lo slicing e controlla l’anteprima prima di stampare."));
         AddStep("5", T("Supported slicers", "Slicer supportati"),
-            T("Bambu Studio, OrcaSlicer and Anycubic Slicer Next can be used as source or destination. Compatible PrusaSlicer 2.x and SuperSlicer projects can be used as source. Choose a destination with one physical nozzle and match the source nozzle diameter.",
-              "Bambu Studio, OrcaSlicer e Anycubic Slicer Next possono essere usati come origine o destinazione. I progetti compatibili di PrusaSlicer 2.x e SuperSlicer possono essere usati come origine. Scegli una destinazione con un solo ugello fisico dello stesso diametro di quello di origine."));
+            T("Bambu Studio, OrcaSlicer, Anycubic Slicer Next and Creality Print can be used as source or destination. To target Creality Print, use a reference 3MF saved by Creality Print. Compatible PrusaSlicer 2.x and SuperSlicer projects can be used as source. Choose a destination with one physical nozzle and match the source nozzle diameter.",
+              "Bambu Studio, OrcaSlicer, Anycubic Slicer Next e Creality Print possono essere usati come origine o destinazione. Per usare Creality Print come destinazione, scegli un 3MF di riferimento salvato con Creality Print. I progetti compatibili di PrusaSlicer 2.x e SuperSlicer possono essere usati come origine. Scegli una destinazione con un solo ugello fisico dello stesso diametro di quello di origine."));
         guide.Select(0, 0);
         guide.ScrollToCaret();
         var inset = new RoundedPanel(() => Input) { Dock = DockStyle.Fill, Padding = new Padding(14), Margin = Padding.Empty };

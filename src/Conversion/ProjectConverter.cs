@@ -21,6 +21,7 @@ internal sealed record SourceProcess(string? Entry, string Label)
 internal static class ProjectConverter
 {
     private const string TranslatedPreset = "Metadata/process_settings_1.config";
+    private const string CrealityConfiguration = "Metadata/creality.config";
     private static readonly HashSet<string> GeometryExtensions = new(StringComparer.OrdinalIgnoreCase)
     {
         ".model", ".rels", ".svg", ".png", ".jpeg", ".jpg"
@@ -165,6 +166,7 @@ internal static class ProjectConverter
         XElement targetModel = ReadModelRoot(template.ReadXml(Model));
         string sourceApp = ReadApplication(modelRoot);
         string targetApp = ReadApplication(targetModel);
+        bool crealityDestination = template.Contains(CrealityConfiguration);
         modelRoot.Elements(Core + "metadata").Single(node => (string?)node.Attribute("name") == "Application").Value = targetApp;
 
         XDocument modelSettings = legacy?.TranslateModel(source, modelRoot, warnings) ?? source.ReadXml(ModelSettings);
@@ -179,10 +181,10 @@ internal static class ProjectConverter
             warnings.Add(T($"A project with {sourceNozzles} nozzles was adapted to one nozzle. Check filament changes in the preview.", $"Progetto da {sourceNozzles} ugelli adattato a un solo ugello. Verifica i cambi di filamento nell'anteprima."));
         CopyPalette(original, target, colors, targetColors, sourceSlots, warnings);
         var retainedSettings = new List<string>();
-        List<string> settings = ProcessSettings.Transfer(original, preset, target, colors.Length, warnings, retainedSettings, variant, review);
+        List<string> settings = ProcessSettings.Transfer(original, preset, target, colors.Length, warnings, retainedSettings, variant, review, crealityDestination);
         JsonObject translatedPreset = BuildTranslatedPreset(target, template, outputPath, targetColors.Length, settings.Concat(presetChanges));
 
-        int plates = SanitizeModelSettings(modelSettings, target, colors.Length, warnings);
+        int plates = SanitizeModelSettings(modelSettings, target, colors.Length, warnings, crealityDestination);
         (XDocument? events, int layerChanges) = FilterLayerEvents(source, plates, colors.Length, warnings);
         if (source.Contains("Metadata/layer_config_ranges.xml"))
             warnings.Add(T("Height range settings were skipped.", "Le impostazioni per intervalli di altezza non sono state trasferite."));
@@ -194,6 +196,8 @@ internal static class ProjectConverter
 
         var retained = source.Names.Where(KeepSourcePart).ToHashSet(StringComparer.OrdinalIgnoreCase);
         retained.UnionWith([Model, Settings, ModelSettings, TranslatedPreset]);
+        if (crealityDestination)
+            retained.Add(CrealityConfiguration);
         if (events is not null)
             retained.Add(LayerEvents);
 
@@ -208,7 +212,7 @@ internal static class ProjectConverter
                     if (name.EndsWith(".rels", StringComparison.OrdinalIgnoreCase))
                         WriteXml(output, name, FilterRelationships(source.ReadXml(name), name, retained));
                     else if (name.Equals(ContentTypes, StringComparison.OrdinalIgnoreCase))
-                        WriteXml(output, name, FilterContentTypes(source.ReadXml(name), retained));
+                        WriteXml(output, name, FilterContentTypes(source.ReadXml(name), retained, crealityDestination));
                     else if (remappedMeshes.TryGetValue(name, out XDocument? mesh))
                         WriteXml(output, name, mesh);
                     else
@@ -217,6 +221,8 @@ internal static class ProjectConverter
 
                 foreach (string name in template.Names.Where(IsEmbeddedHardwarePreset))
                     template.CopyTo(name, output);
+                if (crealityDestination)
+                    template.CopyTo(CrealityConfiguration, output);
 
                 WriteXml(output, Model, model);
                 WriteXml(output, ModelSettings, modelSettings);
@@ -386,7 +392,8 @@ internal static class ProjectConverter
         return tags[0].Value;
     }
 
-    private static int SanitizeModelSettings(XDocument document, JsonObject target, int slots, List<string> warnings)
+    private static int SanitizeModelSettings(XDocument document, JsonObject target, int slots, List<string> warnings,
+        bool crealityDestination)
     {
         if (document.Root is not XElement root || root.Name != "config")
             throw new InvalidDataException(T("The object settings file has an unsupported format.", "Il file delle impostazioni per oggetto ha un formato non supportato."));
@@ -409,7 +416,7 @@ internal static class ProjectConverter
                 bool mapped = false;
                 foreach (string translatedKey in ProcessSettings.TargetKeys(key, target))
                 {
-                    if (!ProcessSettings.TryTranslate(translatedKey, value, target, slots, out string translatedValue))
+                    if (!ProcessSettings.TryTranslate(translatedKey, value, target, slots, out string translatedValue, crealityDestination))
                         continue;
                     mapped = true;
                     if (translatedKey != key && item.Parent!.Elements("metadata").Any(sibling =>
@@ -539,13 +546,22 @@ internal static class ProjectConverter
         return document;
     }
 
-    private static XDocument FilterContentTypes(XDocument document, HashSet<string> retained)
+    private static XDocument FilterContentTypes(XDocument document, HashSet<string> retained, bool crealityDestination)
     {
         foreach (XElement item in document.Root!.Elements().Where(element => element.Name.LocalName == "Override").ToArray())
         {
             string name = Uri.UnescapeDataString(((string?)item.Attribute("PartName") ?? "").TrimStart('/'));
             if (!retained.Contains(name))
                 item.Remove();
+        }
+
+        if (crealityDestination && !document.Root.Elements().Any(element => element.Name.LocalName == "Default" &&
+                string.Equals((string?)element.Attribute("Extension"), "config", StringComparison.OrdinalIgnoreCase)))
+        {
+            XNamespace contentTypes = "http://schemas.openxmlformats.org/package/2006/content-types";
+            document.Root.AddFirst(new XElement(contentTypes + "Default",
+                new XAttribute("Extension", "config"),
+                new XAttribute("ContentType", "application/octet-stream")));
         }
 
         return document;
