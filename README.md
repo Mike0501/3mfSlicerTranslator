@@ -1,48 +1,46 @@
 # 3MF Translator
 
-Convertitore locale per Windows. Prende la geometria e le impostazioni di stampa compatibili da un progetto 3MF e le combina con il profilo stampante di un progetto salvato dallo slicer di destinazione.
+3MF Translator is a local Windows app that combines the geometry and compatible print settings from a 3MF project with the printer profile from a project saved in the destination slicer.
 
-## Avvio
+## Getting started
 
-Apri `bin/Release/esito/3MFTranslator.exe`. Per ricompilare serve l'SDK .NET 10.
-
-Il selettore **Italiano / English** in alto a destra cambia la lingua dell'app, inclusi il resoconto e i dettagli esito. La scelta viene salvata sul computer.
-
-Accanto alle lingue trovi l’interruttore con sole e luna per cambiare tema nella finestra aperta e il punto interrogativo per aprire la guida rapida. L'app conserva il tema scelto.
+Open `bin/Release/esito/3MFTranslator.exe`. To build from source, install the .NET 10 SDK and run the build command.
 
 ```powershell
 dotnet build -c Release -o bin/Release/esito
 ```
 
-## Conversione
+Use the language selector in the upper-right corner to switch between English and Italian. This also changes the language of the report and result details. The sun and moon switch changes the theme in the current window, and the question mark opens the quick guide. The app saves your language and theme preferences.
 
-1. In 3MF Translator scegli il file scaricato. In **Impostazioni da importare dall’origine** puoi usare le impostazioni attive o scegliere un preset di processo incorporato, se presente. Per i campi assenti dal preset scelto vengono usate le impostazioni attive.
-2. In **Destinazione**, usa **Riferimento 3MF…** per scegliere un progetto salvato con la stampante e i preset dello slicer da cui vuoi stampare, oppure **Profilo…** per scegliere un profilo già salvato. Premi **Traduci e salva…** e scegli un nuovo nome.
-3. Se ci sono differenze nelle impostazioni di stampa, scegli **Usa impostazioni di origine**, **Mantieni impostazioni di destinazione** oppure **Rivedi manualmente…**. La revisione permette di filtrare per nome e scegliere i valori singolarmente. Le voci senza un valore di origine compatibile seguono la destinazione. **Annulla** interrompe la conversione.
-4. Apri **Dettagli esito…** sotto il resoconto. Il pulsante è rosso se ci sono errori, giallo se ci sono solo avvisi, verde se la conversione è riuscita senza avvisi. Apri il risultato **come progetto** nello slicer di destinazione e controlla l'anteprima dopo lo slicing.
+## Converting a project
 
-La famiglia Bambu Studio, OrcaSlicer e Anycubic Slicer Next è supportata come origine e destinazione. Sono supportati in ingresso anche i progetti PrusaSlicer nel formato 2.x e SuperSlicer con geometria e impostazioni incorporate. La destinazione richiede un ugello FFF. I progetti Bambu/Orca con più ugelli possono essere adattati se tutti gli ugelli di origine hanno lo stesso diametro di quello di destinazione.
+1. Click **Browse…** and choose the source 3MF. Under **Source settings to import**, use the active settings or choose an embedded process preset if one is available. The app uses the active settings for any fields missing from the selected preset.
+2. Under **Destination**, click **Reference 3MF…** and choose a project saved in the destination slicer with the printer and presets you want to use. To reuse a saved profile, click **Profile…**. Then click **Translate and save…** and choose a new file name.
+3. If the print settings differ, choose **Use source settings**, **Keep destination settings**, or **Review manually…**. In the manual review, you can filter settings by name and choose values individually. The app keeps the destination value for any setting without a compatible source value. Click **Cancel** to stop the conversion.
+4. Click **Result details…** below the report. The button is red for errors, yellow for warnings without errors, and green for a successful conversion without warnings. Open the translated 3MF **as a project** in the destination slicer, slice it, and check the preview before printing.
 
-Se il progetto ha più slot della destinazione, il traduttore compatta gli slot inutilizzati quando può verificare le assegnazioni. Il resoconto mostra la mappatura fra slot di origine e destinazione. I progetti con colori dipinti o sequenze per layer richiedono slot sufficienti a mantenere gli indici originali.
+Bambu Studio, OrcaSlicer, and Anycubic Slicer Next are supported as both sources and destinations. The app also imports projects from PrusaSlicer in its 2.x format and from SuperSlicer when they contain geometry and embedded settings. The destination requires an FFF nozzle. Bambu or Orca projects with multiple nozzles can be converted if all source nozzles match the diameter of the destination nozzle.
 
-Per PrusaSlicer e SuperSlicer l'importazione copre progetti a un piatto e un filamento, inclusi volumi negativi, modificatori, istanze e impostazioni di processo compatibili. L'altezza variabile, gli eventi per layer e gli intervalli di altezza di questi formati vengono segnalati come esclusi. Le destinazioni usano il formato Bambu/Orca. Cura, il nuovo formato di progetto di PrusaSlicer 3 e i filamenti virtuali sono fuori da questa versione.
+If the source project has more filament slots than the destination, the app removes unused slots when it can verify the assignments. The report shows how source slots map to destination slots. Projects with painted colors or per-layer sequences need enough destination slots to preserve the original indices.
 
-### Profili di destinazione
+PrusaSlicer and SuperSlicer imports support projects with one build plate and one filament, including negative volumes, modifiers, instances, and compatible process settings. The report flags variable layer heights, per-layer events, and height ranges from these formats as excluded. Output projects use the Bambu/Orca format. This version excludes Cura, the new PrusaSlicer 3 project format, and virtual filaments.
 
-Usa **Crea profilo… → Aggiungi da 3MF…** per salvare un riferimento da qualsiasi slicer di destinazione supportato, anche prima di aprire un progetto di origine. La libreria conserva una copia del 3MF sotto `%LOCALAPPDATA%\3MFTranslator\references`. Durante una conversione puoi richiamarlo da **Profilo…**. Il traduttore può creare e usare questi profili anche su un PC senza lo slicer che ha generato il riferimento.
+### Destination profiles
 
-Ogni riferimento è un preset base della stampante. Selezionalo in libreria e premi **Personalizza…** per salvare una variante con altezza strato, pareti, riempimento sparso e supporti. Le varianti condividono il riferimento e possono essere modificate in seguito. Durante la conversione, **Mantieni impostazioni di destinazione** applica la variante scelta. La revisione manuale permette di decidere per singola voce.
+Click **Create profile… → Add from 3MF…** to save a reference from any supported destination slicer. You can do this before opening a source project. The library stores a copy of the 3MF under `%LOCALAPPDATA%\3MFTranslator\references`. Use **Profile…** to select it for a conversion. You can create and reuse these profiles on a PC without the slicer that generated the reference.
 
-I riferimenti aggiunti con una versione precedente continuano a usare il percorso salvato. I vecchi preset locali possono essere trasformati in riferimenti con **Converti in 3MF…** o al primo utilizzo. Per quel passaggio serve lo slicer originale con i preset ancora disponibili. Le conversioni successive usano il riferimento salvato in libreria.
+Each reference serves as a base preset for its printer. Select it in the library and click **Customize…** to save a variant with your own layer height, wall count, sparse infill density, and support settings. Variants share the reference file and can be edited later. Choose **Keep destination settings** during conversion to apply the selected variant, or use the manual review to choose individual settings.
 
-Il file risultante conserva mesh, piatti, posizioni, colori e assegnazioni agli slot nel formato condiviso. Il traduttore crea un processo incorporato con le impostazioni compatibili di origine, tra cui altezza dei layer, pareti, infill, supporti, velocità e accelerazioni di processo. Il resoconto mostra l'altezza strato di base, la provenienza delle impostazioni e le personalizzazioni che ha rilevato ma non ha potuto trasferire. Stampante, limiti macchina, temperature, profili filamento e spurgo provengono dal progetto modello. Se cambia la dimensione del piatto, controlla l'ingombro nello slicer. Il G-code di origine viene rimosso e gli intervalli di altezza con impostazioni personalizzate sono segnalati come esclusi.
+References added in an earlier version continue to use their saved paths. You can migrate older local presets with **Convert to 3MF…** or when you first use them. Migration requires the original slicer with the presets still available. Subsequent conversions use the reference saved in the library.
 
-## Uso da riga di comando
+The output preserves meshes, build plates, object positions, colors, and slot assignments in the shared format. The app creates an embedded process preset with compatible source settings, including layer height, wall count, infill, supports, print speeds, and accelerations. The report lists the base layer height, where the settings came from, and any detected customizations that could not be transferred. The printer configuration, machine limits, temperatures, filament profiles, and purging settings come from the reference project. If the build plate size changes, check that the model fits in the destination slicer. The app removes the source G-code and reports custom height-range settings as excluded.
+
+## Command-line usage
 
 ```powershell
 dotnet bin/Release/esito/3MFTranslator.dll convert source.3mf reference.3mf translated.3mf report.txt
 ```
 
-Usa percorsi nuovi per risultato e resoconto. Il codice di uscita è 0 quando il file è stato salvato, 1 per un errore di conversione o scrittura e 2 per argomenti non validi.
+Use new paths for the output project and report. The command exits with code `0` when the project is saved, `1` for a conversion or write error, or `2` for invalid arguments.
 
-Per selezionare un preset incorporato, aggiungi il suo percorso nell'archivio, per esempio `Metadata/process_settings_1.config`, dopo il percorso del resoconto.
+To select an embedded preset, add its path within the archive after the report path, for example `Metadata/process_settings_1.config`.
