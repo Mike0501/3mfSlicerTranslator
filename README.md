@@ -16,7 +16,7 @@ A Windows app for translating and managing 3MF projects between compatible slice
 - Use the desktop app, or convert projects from the command line.
 
 
-## Showcase
+## Showcase and Visual Guide
 
 ### Main application window
 
@@ -26,41 +26,53 @@ Convert compatible 3MF printing projects between Bambu Studio, OrcaSlicer, Anycu
 
 ## How it works
 
-### 1. Create a destination printer profile
+<details>
+<summary><strong> 1. Create a destination printer profile</strong></summary>
 
 ![Destination slicer selection](assets/scrrenshots/02-profile-creation.png)
 
 Create a reusable profile from supported slicer presets or use a reference 3MF project saved in the destination slicer.
+</details>
 
-### 2. Configure the printer
+<details>
+<summary><strong> 2. Configure the printer</strong></summary>
 
 ![Printer configuration](assets/scrrenshots/03-printer-configuration.png)
 
 Choose the destination slicer, printer model, nozzle preset, build plate, and filament slot count where supported.
+</details>
 
-### 3. Load a project and map filaments
+<details>
+<summary><strong>3. Load a project and map filaments</strong></summary>
 
 ![Filament slot mapping](assets/scrrenshots/04-filament-mapping.png)
 
 Select the source 3MF and destination profile. When necessary, review filament slot assignments.
+</details>
 
-### 4. Choose print settings
+<details>
+<summary><strong> 4. Choose print settings</strong></summary>
 
 ![Print settings selection](assets/scrrenshots/05-setting-selection.png)
 
 Use compatible source settings, keep destination settings, or review settings manually.
+</details>
 
-### 5. Review individual settings
+<details>
+<summary><strong>5. Review individual settings</strong></summary>
 
 ![Manual process settings review](assets/scrrenshots/06-manual-settings-review.png)
 
 Compare source and destination settings and choose which compatible values to save.
+</details>
 
-### 6. Check the conversion report
+<details>
+<summary><strong>6. Check the conversion report</strong></summary>
 
 ![3MF conversion report](assets/scrrenshots/07-conversion-report.png)
 
 Inspect errors, warnings, and completed actions. Open the resulting 3MF in the destination slicer and verify the sliced preview.
+</details>
 
 For complete instructions, see the [User Guide](USER_GUIDE.txt).
   
