@@ -1,6 +1,6 @@
-# 3mfSlicerTranslator
+# 3mfSlicerTranslator - Convert 3MF Files Between Bambu Studio, OrcaSlicer, Anycubic Slicer Next and Creality Print
 
-A Windows app for converting 3MF projects between compatible slicers.
+A Windows app for translating and managing 3MF projects between compatible slicers.
 
 [Read the user guide](USER_GUIDE.txt)
 
@@ -14,3 +14,64 @@ A Windows app for converting 3MF projects between compatible slicers.
 - Save profiles for reuse without keeping the slicer that supplied the presets installed.
 - Review transferred settings, filament slot mappings, and conversion warnings.
 - Use the desktop app, or convert projects from the command line.
+
+
+## Showcase and Visual Guide
+
+
+![3mfSlicerTranslator main window](assets/scrrenshots/01-homepage.png)
+
+Convert compatible 3MF printing projects between Bambu Studio, OrcaSlicer, Anycubic Slicer Next, and Creality Print.
+
+## How it works
+
+<details>
+<summary><strong> 1. Create a destination printer profile</strong></summary>
+
+![Destination slicer selection](assets/scrrenshots/02-profile-creation.png)
+
+Create a reusable profile from supported slicer presets or use a reference 3MF project saved in the destination slicer.
+</details>
+
+<details>
+<summary><strong> 2. Configure the printer</strong></summary>
+
+![Printer configuration](assets/scrrenshots/03-printer-configuration.png)
+
+Choose the destination slicer, printer model, nozzle preset, build plate, and filament slot count where supported.
+</details>
+
+<details>
+<summary><strong>3. Load a project and map filaments</strong></summary>
+
+![Filament slot mapping](assets/scrrenshots/04-filament-mapping.png)
+
+Select the source 3MF and destination profile. When necessary, review filament slot assignments.
+</details>
+
+<details>
+<summary><strong> 4. Choose print settings</strong></summary>
+
+![Print settings selection](assets/scrrenshots/05-setting-selection.png)
+
+Use compatible source settings, keep destination settings, or review settings manually.
+</details>
+
+<details>
+<summary><strong>5. Review individual settings</strong></summary>
+
+![Manual process settings review](assets/scrrenshots/06-manual-settings-review.png)
+
+Compare source and destination settings and choose which compatible values to save.
+</details>
+
+<details>
+<summary><strong>6. Check the conversion report</strong></summary>
+
+![3MF conversion report](assets/scrrenshots/07-conversion-report.png)
+
+Inspect errors, warnings, and completed actions. Open the resulting 3MF in the destination slicer and verify the sliced preview.
+</details>
+
+For complete instructions, see the [User Guide](USER_GUIDE.txt).
+  
