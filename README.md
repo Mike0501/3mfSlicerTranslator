@@ -46,7 +46,7 @@ Select the source 3MF and destination profile. When necessary, review filament s
 
 ### 4. Choose print settings
 
-![Print settings selection](assets/scrrenshots/05-settings-selection.png)
+![Print settings selection](assets/scrrenshots/05-setting-selection.png)
 
 Use compatible source settings, keep destination settings, or review settings manually.
 
