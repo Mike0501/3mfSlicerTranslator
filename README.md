@@ -1,4 +1,4 @@
-# 3mfSlicerTranslator - A 3mf Translation tool
+# 3mfSlicerTranslator - Convert 3MF Files Between Bambu Studio, OrcaSlicer, Anycubic Slicer Next and Creality Print
 
 A Windows app for translating and managing 3MF projects between compatible slicers.
 
