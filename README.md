@@ -18,7 +18,6 @@ A Windows app for translating and managing 3MF projects between compatible slice
 
 ## Showcase and Visual Guide
 
-### Main application window
 
 ![3mfSlicerTranslator main window](assets/scrrenshots/01-homepage.png)
 
