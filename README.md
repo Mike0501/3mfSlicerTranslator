@@ -1,6 +1,6 @@
-# 3mfSlicerTranslator
+# 3mfSlicerTranslator - A 3mf Translation tool
 
-A Windows app for converting 3MF projects between compatible slicers.
+A Windows app for translating and managing 3MF projects between compatible slicers.
 
 [Read the user guide](USER_GUIDE.txt)
 
