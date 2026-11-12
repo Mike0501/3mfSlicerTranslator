@@ -131,7 +131,8 @@ internal static class ProjectConverter
 
     internal static ConversionResult Convert(string sourcePath, string templatePath, string outputPath,
         string? sourcePresetEntry = null, ReviewSettings? review = null, PrintPreset? destinationPreset = null,
-        ReviewFilamentSlots? reviewSlots = null)
+        ReviewFilamentSlots? reviewSlots = null, Func<IReadOnlyList<int>, bool>? reviewInvalidColors = null,
+        Func<LargeModelRequest, long?>? reviewLargeModels = null)
     {
         outputPath = Path.GetFullPath(outputPath);
         if (File.Exists(outputPath))
@@ -139,8 +140,8 @@ internal static class ProjectConverter
         if (!Path.GetExtension(outputPath).Equals(".3mf", StringComparison.OrdinalIgnoreCase))
             throw new InvalidDataException(T("The output file name must end in .3mf.", "Il nome del file di destinazione deve terminare con .3mf."));
 
-        using var source = new ProjectArchive(sourcePath);
-        using var template = new ProjectArchive(templatePath);
+        using var source = new ProjectArchive(sourcePath, reviewLargeModels);
+        using var template = new ProjectArchive(templatePath, reviewLargeModels);
         PrusaProject? legacy = PrusaProject.Detect(source);
         if (legacy is null)
             source.Validate(T("source", "di origine"));
@@ -158,7 +159,8 @@ internal static class ProjectConverter
         IReadOnlyList<string> presetChanges = destinationPreset?.Apply(target, LayerHeightRange.Read(target)) ?? [];
         string printer = ProcessSettings.StringValue(target["printer_settings_id"])!;
         string[] targetColors = ReadPalette(target);
-        string[] originalColors = legacy is not null && original["filament_colour"] is null ? [targetColors[0]] : ReadPalette(original);
+        string[] originalColors = legacy is not null && original["filament_colour"] is null ? [targetColors[0]] :
+            ReadPalette(original, reviewInvalidColors, warnings);
         if (legacy is not null && original["filament_colour"] is null)
             warnings.Add(T("The source project has no filament color. The first destination color was used.", "Il progetto di origine non specifica un colore filamento. È stato usato il primo colore di destinazione."));
         XDocument model = source.ReadXml(Model);
@@ -167,6 +169,9 @@ internal static class ProjectConverter
         string sourceApp = ReadApplication(modelRoot);
         string targetApp = ReadApplication(targetModel);
         bool crealityDestination = template.Contains(CrealityConfiguration);
+        bool anycubicDestination = IsAnycubicProject(template, targetApp);
+        bool organicSupportStyle = anycubicDestination || crealityDestination ||
+            targetApp.Contains("OrcaSlicer", StringComparison.OrdinalIgnoreCase);
         modelRoot.Elements(Core + "metadata").Single(node => (string?)node.Attribute("name") == "Application").Value = targetApp;
 
         XDocument modelSettings = legacy?.TranslateModel(source, modelRoot, warnings) ?? source.ReadXml(ModelSettings);
@@ -181,10 +186,10 @@ internal static class ProjectConverter
             warnings.Add(T($"A project with {sourceNozzles} nozzles was adapted to one nozzle. Check filament changes in the preview.", $"Progetto da {sourceNozzles} ugelli adattato a un solo ugello. Verifica i cambi di filamento nell'anteprima."));
         CopyPalette(original, target, colors, targetColors, sourceSlots, warnings);
         var retainedSettings = new List<string>();
-        List<string> settings = ProcessSettings.Transfer(original, preset, target, colors.Length, warnings, retainedSettings, variant, review, crealityDestination);
+        List<string> settings = ProcessSettings.Transfer(original, preset, target, colors.Length, warnings, retainedSettings, variant, review, crealityDestination, organicSupportStyle, anycubicDestination);
         JsonObject translatedPreset = BuildTranslatedPreset(target, template, outputPath, targetColors.Length, settings.Concat(presetChanges));
 
-        int plates = SanitizeModelSettings(modelSettings, target, colors.Length, warnings, crealityDestination);
+        int plates = SanitizeModelSettings(modelSettings, target, colors.Length, warnings, crealityDestination, organicSupportStyle, anycubicDestination);
         (XDocument? events, int layerChanges) = FilterLayerEvents(source, plates, colors.Length, warnings);
         if (source.Contains("Metadata/layer_config_ranges.xml"))
             warnings.Add(T("Height range settings were skipped.", "Le impostazioni per intervalli di altezza non sono state trasferite."));
@@ -200,6 +205,8 @@ internal static class ProjectConverter
             retained.Add(CrealityConfiguration);
         if (events is not null)
             retained.Add(LayerEvents);
+        if (anycubicDestination && template.Contains("Metadata/slice_info.config"))
+            retained.Add("Metadata/slice_info.config");
 
         string temporaryPath = Path.Combine(Path.GetDirectoryName(outputPath)!, $".3mftranslator-{Guid.NewGuid():N}.tmp");
         try
@@ -221,6 +228,13 @@ internal static class ProjectConverter
 
                 foreach (string name in template.Names.Where(IsEmbeddedHardwarePreset))
                     template.CopyTo(name, output);
+                if (anycubicDestination && template.Contains("Metadata/slice_info.config"))
+                {
+                    var identity = template.ReadXml("Metadata/slice_info.config");
+                    // Carry the slicer identity, not stale slicing results from the reference.
+                    WriteXml(output, "Metadata/slice_info.config", new XDocument(new XElement("config",
+                        identity.Root?.Element("header") is XElement header ? new XElement(header) : null)));
+                }
                 if (crealityDestination)
                     template.CopyTo(CrealityConfiguration, output);
 
@@ -240,6 +254,10 @@ internal static class ProjectConverter
                 File.Delete(temporaryPath);
         }
 
+        foreach (var archive in new[] { (File: source, Path: sourcePath), (File: template, Path: templatePath) })
+            if (archive.File.ModelSizeLimit > DefaultModelSizeLimit)
+                warnings.Add(T($"The model read limit for {Path.GetFileName(archive.Path)} was increased to {archive.File.ModelSizeLimit / MiB} MiB for this conversion.",
+                    $"Il limite di lettura dei modelli per {Path.GetFileName(archive.Path)} è stato aumentato a {archive.File.ModelSizeLimit / MiB} MiB per questa conversione."));
         string? support = ProcessSettings.StringValue(target["enable_support"]);
         return new ConversionResult(sourceApp, targetApp, printer, plates, colors.Length, layerChanges,
             ProcessName(preset ?? original), ProcessName(target), ProcessSettings.StringValue(target["layer_height"]),
@@ -279,14 +297,26 @@ internal static class ProjectConverter
         return diameter;
     }
 
-    private static string[] ReadPalette(JsonObject profile)
+    private static string[] ReadPalette(JsonObject profile, Func<IReadOnlyList<int>, bool>? reviewInvalidColors = null,
+        List<string>? warnings = null)
     {
         if (profile["filament_colour"] is not JsonArray { Count: > 0 } palette)
             throw new InvalidDataException(T("The profile does not include filament slots.", "Il profilo non contiene gli slot dei filamenti."));
 
-        return palette.Select(node => ProcessSettings.StringValue(node) is string color && IsColor(color)
-            ? color
-            : throw new InvalidDataException(T("The palette contains an invalid color.", "La tavolozza contiene un colore non valido."))).ToArray();
+        int[] invalidSlots = palette.Select((node, index) => (node, index))
+            .Where(item => ProcessSettings.StringValue(item.node) is not string color || !IsColor(color))
+            .Select(item => item.index + 1).ToArray();
+        if (invalidSlots.Length > 0)
+        {
+            if (reviewInvalidColors is null)
+                throw new InvalidDataException(T("The palette contains an invalid color.", "La tavolozza contiene un colore non valido."));
+            if (!reviewInvalidColors(invalidSlots))
+                throw new OperationCanceledException();
+            warnings?.Add(T($"Invalid source color(s) in slot(s) {string.Join(", ", invalidSlots)} were replaced with black.",
+                $"I colori non validi negli slot {string.Join(", ", invalidSlots)} sono stati sostituiti con il nero."));
+        }
+
+        return palette.Select(node => ProcessSettings.StringValue(node) is string color && IsColor(color) ? color : "#000000").ToArray();
     }
 
     private static bool IsColor(string value) => Regex.IsMatch(value, @"\A#[0-9a-fA-F]{6}\z");
@@ -392,8 +422,13 @@ internal static class ProjectConverter
         return tags[0].Value;
     }
 
+    private static bool IsAnycubicProject(ProjectArchive archive, string application) =>
+        application.Contains("Anycubic", StringComparison.OrdinalIgnoreCase) ||
+        (archive.Contains("Metadata/slice_info.config") && archive.ReadXml("Metadata/slice_info.config")
+            .Descendants("header_item").Any(item => ((string?)item.Attribute("key"))?.StartsWith("X-ACNext-", StringComparison.Ordinal) == true));
+
     private static int SanitizeModelSettings(XDocument document, JsonObject target, int slots, List<string> warnings,
-        bool crealityDestination)
+        bool crealityDestination, bool organicSupportStyle, bool anycubicDestination)
     {
         if (document.Root is not XElement root || root.Name != "config")
             throw new InvalidDataException(T("The object settings file has an unsupported format.", "Il file delle impostazioni per oggetto ha un formato non supportato."));
@@ -416,7 +451,7 @@ internal static class ProjectConverter
                 bool mapped = false;
                 foreach (string translatedKey in ProcessSettings.TargetKeys(key, target))
                 {
-                    if (!ProcessSettings.TryTranslate(translatedKey, value, target, slots, out string translatedValue, crealityDestination))
+                    if (!ProcessSettings.TryTranslate(translatedKey, value, target, slots, out string translatedValue, crealityDestination, organicSupportStyle, anycubicDestination))
                         continue;
                     mapped = true;
                     if (translatedKey != key && item.Parent!.Elements("metadata").Any(sibling =>

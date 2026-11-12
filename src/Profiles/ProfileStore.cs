@@ -61,6 +61,21 @@ internal static class ProfileStore
         return variant;
     }
 
+    internal static void Delete(DestinationProfile profile) => Delete(profile, StorePath);
+
+    private static void Delete(DestinationProfile profile, string storePath)
+    {
+        using var gate = new FileStream(storePath + ".lock", FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
+        List<DestinationProfile> profiles = File.Exists(storePath)
+            ? JsonSerializer.Deserialize<List<DestinationProfile>>(File.ReadAllText(storePath)) ?? [] : [];
+        int index = profiles.FindIndex(item => item.Name.Equals(profile.Name, StringComparison.CurrentCultureIgnoreCase));
+        if (index < 0 || profiles[index] != profile)
+            throw new InvalidOperationException(T("The profile has changed. Reopen the library and try again.",
+                "Il profilo è cambiato. Riapri la libreria e riprova."));
+        profiles.RemoveAt(index);
+        WriteProfiles(storePath, profiles);
+    }
+
     private static void Save(DestinationProfile profile, DestinationProfile? previous)
     {
         using var gate = new FileStream(StorePath + ".lock", FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
@@ -80,11 +95,16 @@ internal static class ProfileStore
             profiles[index] = profile;
         }
 
-        string temporary = StorePath + "." + Guid.NewGuid().ToString("N") + ".tmp";
+        WriteProfiles(StorePath, profiles);
+    }
+
+    private static void WriteProfiles(string storePath, List<DestinationProfile> profiles)
+    {
+        string temporary = storePath + "." + Guid.NewGuid().ToString("N") + ".tmp";
         try
         {
             File.WriteAllText(temporary, JsonSerializer.Serialize(profiles.OrderBy(item => item.Name)));
-            File.Move(temporary, StorePath, overwrite: true);
+            File.Move(temporary, storePath, overwrite: true);
         }
         finally
         {

@@ -155,7 +155,7 @@ internal static class ProcessSettings
 
     internal static List<string> Transfer(JsonObject source, JsonObject? preset, JsonObject target, int slots,
         List<string> warnings, List<string> retained, (int Index, int Count)? variant = null, ReviewSettings? review = null,
-        bool crealityDestination = false)
+        bool crealityDestination = false, bool organicSupportStyle = false, bool anycubicDestination = false)
     {
         var transferred = new List<string>();
         var skipped = new List<string>();
@@ -181,7 +181,7 @@ internal static class ProcessSettings
                 preferred = selected;
                 preferredIndex = active.Index;
             }
-            JsonNode? translated = TranslateValue(key, preferred, target, slots, crealityDestination);
+            JsonNode? translated = TranslateValue(key, preferred, target, slots, crealityDestination, organicSupportStyle, anycubicDestination);
             if (review is null)
             {
                 if (translated is not null)
@@ -206,7 +206,7 @@ internal static class ProcessSettings
             {
                 for (int index = 0; index < variants.Count; index++)
                 {
-                    if (variants[index] is not JsonNode option || TranslateValue(key, option, target, slots, crealityDestination) is not JsonNode candidate ||
+                    if (variants[index] is not JsonNode option || TranslateValue(key, option, target, slots, crealityDestination, organicSupportStyle, anycubicDestination) is not JsonNode candidate ||
                         options.Any(item => JsonNode.DeepEquals(item.Value, candidate)))
                         continue;
                     options.Add(SourceOption(candidate, VariantName(names, index, variants.Count)));
@@ -263,7 +263,8 @@ internal static class ProcessSettings
         names?.Count == count && StringValue(names[index]) is string name
             ? name : T($"Variant {index + 1}", $"Variante {index + 1}");
 
-    private static JsonNode? TranslateValue(string key, JsonNode value, JsonObject target, int slots, bool crealityDestination)
+    private static JsonNode? TranslateValue(string key, JsonNode value, JsonObject target, int slots, bool crealityDestination,
+        bool organicSupportStyle, bool anycubicDestination)
     {
         if (NumericOrPercent.Contains(key) && TryTransferNumeric(key, value, target, out JsonNode? numeric))
             return numeric;
@@ -274,7 +275,7 @@ internal static class ProcessSettings
             if (array.Any(item => StringValue(item) != scalar))
                 return null;
         }
-        if (scalar is null || !TryTranslate(key, scalar, target, slots, out string translated, crealityDestination))
+        if (scalar is null || !TryTranslate(key, scalar, target, slots, out string translated, crealityDestination, organicSupportStyle, anycubicDestination))
             return null;
         return target[key] is JsonArray targetValues
             ? new JsonArray(Enumerable.Range(0, targetValues.Count).Select(_ => (JsonNode?)JsonValue.Create(translated)).ToArray())
@@ -317,9 +318,12 @@ internal static class ProcessSettings
         SettingAliases.TryGetValue(key, out string[]? aliases) ? aliases.Where(target.ContainsKey) : [];
 
     internal static bool TryTranslate(string key, string value, JsonObject target, int slots, out string translatedValue,
-        bool crealityDestination)
+        bool crealityDestination, bool organicSupportStyle = false, bool anycubicDestination = false)
     {
         translatedValue = value;
+        if (anycubicDestination && key is "raft_first_layer_expansion" or "tree_support_wall_count" &&
+            TryNumber(value, out double anycubicNumber) && anycubicNumber < 0)
+            return false;
         if (crealityDestination && (key switch
         {
             "raft_first_layer_expansion" => TryNumber(value, out double expansion) && expansion < 0,
@@ -331,6 +335,8 @@ internal static class ProcessSettings
 
         translatedValue = (key, value) switch
         {
+            ("support_style", "tree_organic") when organicSupportStyle || crealityDestination => "organic",
+            ("support_style", "organic") when !organicSupportStyle && !crealityDestination => "tree_organic",
             ("support_type", "normal") => "normal(manual)",
             ("support_type", "tree") => "tree(manual)",
             ("support_type", "hybrid(auto)") => "tree(auto)",
@@ -348,7 +354,7 @@ internal static class ProcessSettings
             ("ensure_vertical_shell_thickness", "ensure_moderate") when IsBambuShellSetting(target) => "partial",
             _ => value
         };
-        return CanTransfer(key, translatedValue, target, slots);
+        return CanTransfer(key, translatedValue, target, slots, organicSupportStyle || crealityDestination);
     }
 
     private static bool IsOrcaShellSetting(JsonObject target) =>
@@ -357,7 +363,7 @@ internal static class ProcessSettings
     private static bool IsBambuShellSetting(JsonObject target) =>
         StringValue(target["ensure_vertical_shell_thickness"]) is "disabled" or "partial" or "enabled";
 
-    private static bool CanTransfer(string key, string value, JsonObject target, int slots)
+    private static bool CanTransfer(string key, string value, JsonObject target, int slots, bool organicSupportStyle)
     {
         if (StringValue(target[key]) is null &&
             !(VariantSettings.Contains(key) && target[key] is JsonArray { Count: > 0 } values &&
@@ -372,7 +378,11 @@ internal static class ProcessSettings
             return value is "0" or "1";
         }
         if (Choices.TryGetValue(key, out string[]? choices))
+        {
+            if (key == "support_style" && organicSupportStyle)
+                return value == "organic" || (value != "tree_organic" && choices.Contains(value, StringComparer.Ordinal));
             return choices.Contains(value, StringComparer.Ordinal);
+        }
         if (Switches.Contains(key))
             return value is "0" or "1";
         if (Integers.Contains(key))

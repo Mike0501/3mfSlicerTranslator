@@ -74,8 +74,12 @@ internal sealed record PrusaProject(string SettingsPath, string ModelSettingsPat
         };
         if (SplitList(values.GetValueOrDefault("filament_type")) is [string material])
             settings["filament_type"] = new JsonArray(JsonValue.Create(material.Trim('"')));
-        string? color = SplitList(values.GetValueOrDefault("extruder_colour")).Concat(SplitList(values.GetValueOrDefault("filament_colour")))
-            .Select(item => item.Trim('"')).FirstOrDefault(item => item.Length == 7 && item[0] == '#' && item[1..].All(Uri.IsHexDigit));
+        string[] colors = SplitList(values.GetValueOrDefault("extruder_colour")).Concat(SplitList(values.GetValueOrDefault("filament_colour")))
+            .Select(item => item.Trim('"')).ToArray();
+        // Keep an invalid supplied value so the shared palette recovery can ask the user to repair it.
+        string? color = colors.FirstOrDefault(item => item.Length == 7 && item[0] == '#' && item[1..].All(Uri.IsHexDigit))
+            ?? colors.FirstOrDefault()
+            ?? (values.ContainsKey("extruder_colour") || values.ContainsKey("filament_colour") ? "" : null);
         if (color is not null)
             settings["filament_colour"] = new JsonArray(JsonValue.Create(color));
         if (values.TryGetValue("bed_shape", out string? bed))

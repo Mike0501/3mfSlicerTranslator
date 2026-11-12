@@ -14,5 +14,6 @@
   </PropertyGroup>
   <ItemGroup>
     <EmbeddedResource Include="assets/Translator.ico" LogicalName="Translator.Icon" />
+    <EmbeddedResource Include="assets/printer-model-catalog.json" LogicalName="Translator.PrinterModelCatalog.json" />
   </ItemGroup>
 </Project>
