@@ -27,6 +27,17 @@ quick guide. The app saves your language and theme preferences.
    to confirm or adjust the suggested mapping for the used filaments. When
    multiple filaments share a destination slot, they use the color of the
    lowest-numbered source slot assigned to it.
+   If a source filament color is invalid, the app lists the affected slots and
+   asks whether to replace those colors with black (#000000). Confirm to
+   continue, or cancel without saving a project. Valid colors are preserved;
+   replacements are listed in Result details. This applies to every supported
+   source slicer, including PrusaSlicer and SuperSlicer imports.
+   If a geometry model exceeds the default 128 MiB read limit, the app lists
+   the large parts and lets you choose a higher limit for that conversion,
+   up to 512 MiB per model, or cancel. The minimum offered includes every
+   listed model. Loading large models can require several times their size
+   in memory. The chosen limit is included in Result details. It concerns
+   uncompressed model data; it does not change the physical print dimensions.
 4. Open Result details below the report. Red indicates errors, yellow indicates
    warnings, and green indicates success without warnings. Open the translated
    3MF as a project in the destination slicer, slice it, and check the preview.
@@ -48,12 +59,12 @@ If the Orca catalog is unavailable, click
 Connect OrcaSlicer and choose the folder containing orca-slicer.exe. The app
 remembers a location after loading compatible presets from it.
 
-The catalog also reads compatible JSON presets from Anycubic Slicer Next and
-Bambu Studio. Use Locate slicer for their nonstandard locations. When
-OrcaSlicer is connected, its catalog adds Bambu Lab and Creality models to the
-model lists for Bambu Studio and Creality Print. For Creality Print, or for
-a Bambu model without a compatible native preset, use the 3MF reference
-workflow below and save the reference in the intended destination slicer.
+The app includes an offline printer model list for Bambu Lab, Anycubic, and
+Creality, based on the OrcaSlicer catalog. OrcaSlicer does not need to be
+installed to browse these model names. Compatible presets are still read from
+the selected slicer when available. If a model has no compatible preset on
+this computer, use the 3MF reference workflow below and save a project in the
+intended destination slicer.
 
 Click Create profile, then From a 3MF reference. Choose or type the printer brand,
 model, nozzle diameter, and build plate to filter the available references.
@@ -70,8 +81,14 @@ generated the 3MF.
 Each reference serves as a base preset. Select it and click Customize to save a
 variant with a different layer height, wall count, sparse infill density, or
 support setting. Variants share the same reference and can be edited later.
+To remove a saved profile, select it in the library, click Delete profile,
+and confirm. If it was the selected conversion destination, choose another
+profile before converting. Other presets sharing its reference remain usable.
 During conversion, choose Keep destination settings to apply the selected
 variant, or use Review manually to choose individual settings.
+Organic support styles are translated to the destination slicer's spelling:
+organic for Anycubic Slicer Next, OrcaSlicer and Creality Print;
+tree_organic for Bambu Studio.
 
 References added with an earlier version still use their original saved paths.
 Use Convert to 3MF to migrate an older local preset, or migrate it on first use.

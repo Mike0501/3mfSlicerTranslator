@@ -6,8 +6,18 @@ using System.Xml.Linq;
 
 namespace Translator;
 
+internal sealed record LargeModelPart(string Name, long Bytes);
+internal sealed record LargeModelRequest(string ArchiveName, IReadOnlyList<LargeModelPart> Parts)
+{
+    internal long RequiredBytes => Parts.Max(part => part.Bytes);
+    internal long RequiredMiB => (RequiredBytes + ProjectArchive.MiB - 1) / ProjectArchive.MiB;
+}
+
 internal sealed class ProjectArchive : IDisposable
 {
+    internal const long MiB = 1024 * 1024;
+    internal const long DefaultModelSizeLimit = 128 * MiB;
+    internal const long MaximumModelSizeLimit = 512 * MiB;
     internal const string Model = "3D/3dmodel.model";
     internal const string Settings = "Metadata/project_settings.config";
     internal const string ModelSettings = "Metadata/model_settings.config";
@@ -18,9 +28,14 @@ internal sealed class ProjectArchive : IDisposable
 
     private readonly ZipArchive zip;
     private readonly Dictionary<string, ZipArchiveEntry> entries = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Func<LargeModelRequest, long?>? reviewLargeModels;
+    private readonly string archiveName;
+    internal long ModelSizeLimit { get; private set; } = DefaultModelSizeLimit;
 
-    internal ProjectArchive(string path)
+    internal ProjectArchive(string path, Func<LargeModelRequest, long?>? reviewLargeModels = null)
     {
+        this.reviewLargeModels = reviewLargeModels;
+        archiveName = Path.GetFileName(path);
         zip = ZipFile.OpenRead(path);
         try
         {
@@ -61,7 +76,28 @@ internal sealed class ProjectArchive : IDisposable
 
     internal XDocument ReadXml(string name)
     {
-        const long limit = 128 * 1024 * 1024;
+        long limit = DefaultModelSizeLimit;
+        if (IsGeometryModel(name))
+        {
+            if (entries.TryGetValue(name, out var entry) && entry.Length > ModelSizeLimit)
+            {
+                var largeParts = entries.Values.Where(part => IsGeometryModel(part.FullName) && part.Length > DefaultModelSizeLimit)
+                    .Select(part => new LargeModelPart(part.FullName, part.Length)).ToArray();
+                var request = new LargeModelRequest(archiveName, largeParts);
+                if (request.RequiredBytes > MaximumModelSizeLimit)
+                    throw new InvalidDataException(T($"A model in {archiveName} requires {request.RequiredMiB} MiB. This version supports up to {MaximumModelSizeLimit / MiB} MiB per model.",
+                        $"Un modello in {archiveName} richiede {request.RequiredMiB} MiB. Questa versione supporta fino a {MaximumModelSizeLimit / MiB} MiB per modello."));
+                if (reviewLargeModels is null)
+                    throw new InvalidDataException(T($"3MF model exceeds the default read limit · {name} ({request.RequiredMiB} MiB required; {DefaultModelSizeLimit / MiB} MiB default). Use the desktop app to approve a higher limit.",
+                        $"Il modello 3MF supera il limite di lettura predefinito · {name} (richiesti {request.RequiredMiB} MiB; predefiniti {DefaultModelSizeLimit / MiB} MiB). Usa l’app desktop per autorizzare un limite maggiore."));
+                long selected = reviewLargeModels(request) ?? throw new OperationCanceledException();
+                if (selected < request.RequiredBytes || selected > MaximumModelSizeLimit)
+                    throw new InvalidDataException(T("The selected model read limit is outside the supported range.",
+                        "Il limite di lettura scelto per i modelli non rientra nell’intervallo supportato."));
+                ModelSizeLimit = selected;
+            }
+            limit = ModelSizeLimit;
+        }
         using Stream stream = Open(name, limit);
         using XmlReader reader = XmlReader.Create(stream, new XmlReaderSettings
         {
@@ -70,6 +106,9 @@ internal sealed class ProjectArchive : IDisposable
         });
         return XDocument.Load(reader);
     }
+
+    private static bool IsGeometryModel(string name) => name.StartsWith("3D/", StringComparison.OrdinalIgnoreCase) &&
+        name.EndsWith(".model", StringComparison.OrdinalIgnoreCase);
 
     internal JsonObject ReadSettings(string name = Settings)
     {

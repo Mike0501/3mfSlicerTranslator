@@ -65,26 +65,10 @@ internal sealed class LegacyProfileCatalog
     {
         string programFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
         string localPrograms = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs");
-        string[] paths = ["AnycubicSlicerNext/AnycubicSlicerNext.exe", "OrcaSlicer/orca-slicer.exe", "Bambu Studio/bambu-studio.exe"];
+        string[] paths = ["AnycubicSlicerNext/AnycubicSlicerNext.exe", "Bambu Studio/bambu-studio.exe"];
         return new[] { programFiles, localPrograms }.SelectMany(root => paths.Select(path => Path.Combine(root, path)))
             .Concat(paths.Select(path => ReadSlicerLocation(Path.GetFileName(path))))
-            .Concat(WorkspaceOrcaLocations())
             .OfType<string>().Where(File.Exists).Distinct(StringComparer.OrdinalIgnoreCase);
-    }
-
-    private static IEnumerable<string> WorkspaceOrcaLocations()
-    {
-        // Release builds launched from this checkout can use its portable tools.
-        for (DirectoryInfo? directory = new(AppContext.BaseDirectory); directory is not null; directory = directory.Parent)
-        {
-            if (!File.Exists(Path.Combine(directory.FullName, "3MFTranslator.csproj")))
-                continue;
-            string tools = Path.Combine(directory.FullName, ".local", "slicers");
-            if (Directory.Exists(tools))
-                foreach (string location in Directory.EnumerateDirectories(tools, "OrcaSlicer*"))
-                    yield return Path.Combine(location, "orca-slicer.exe");
-            yield break;
-        }
     }
 
     private static string SlicerLocationFile(string executable) => Path.Combine(

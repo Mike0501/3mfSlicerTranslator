@@ -173,8 +173,12 @@ internal sealed class ProfileCreationForm : Form
             var matches = nozzles.Where(item => string.IsNullOrWhiteSpace(plate.Text) ||
                 item.Configuration.Plates.Any(value => Matches(plate.Text, value))).ToArray();
 
-            SetSuggestions(brand, references.Select(item => item.Configuration.Machine.Brand));
-            SetSuggestions(model, brands.Select(item => item.Configuration.Machine.Model));
+            SetSuggestions(brand, references.Select(item => item.Configuration.Machine.Brand)
+                .Concat(BundledPrinterCatalog.ByBrand.Keys));
+            IEnumerable<string> availableModels = brands.Select(item => item.Configuration.Machine.Model);
+            if (BundledPrinterCatalog.ByBrand.TryGetValue(brand.Text.Trim(), out string[]? bundledModels))
+                availableModels = availableModels.Concat(bundledModels);
+            SetSuggestions(model, availableModels);
             SetSuggestions(nozzle, models.Select(item => item.Configuration.Machine.NozzleDiameter.ToString("G", CultureInfo.CurrentCulture))
                 .Concat(new[] { 0.2, 0.25, 0.4, 0.6, 0.8 }.Select(value => value.ToString("G", CultureInfo.CurrentCulture))));
             SetSuggestions(plate, nozzles.SelectMany(item => item.Configuration.Plates)
@@ -189,8 +193,8 @@ internal sealed class ProfileCreationForm : Form
                 reference.SelectedIndex = 0;
             reference.Enabled = matches.Length > 0;
             status.Text = matches.Length == 0
-                ? T("Add a 3MF saved with this configuration, or clear a filter to see more references.",
-                    "Aggiungi un 3MF salvato con questa configurazione o svuota un filtro per vedere altri riferimenti.")
+                ? T("This model is in the built-in catalog. Add a 3MF saved by the destination slicer to create its profile.",
+                    "Questo modello è nel catalogo integrato. Aggiungi un 3MF salvato dallo slicer di destinazione per creare il profilo.")
                 : "";
             UpdateName();
         }

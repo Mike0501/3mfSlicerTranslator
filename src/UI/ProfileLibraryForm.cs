@@ -13,6 +13,7 @@ internal sealed class ProfileLibraryForm : Form
     private readonly Label status = new() { AutoSize = true, ForeColor = Muted, MaximumSize = new Size(520, 0) };
     private readonly RoundedButton migrate = new() { Text = T("Convert to 3MF…", "Converti in 3MF…"), Visible = false };
     private readonly RoundedButton customize = new() { Text = T("Customize…", "Personalizza…"), Visible = false };
+    private readonly RoundedButton delete = new() { Text = T("Delete profile…", "Elimina profilo…"), Enabled = false };
     private readonly FlowLayoutPanel actions = new() { Dock = DockStyle.Fill, AutoSize = true, Margin = new Padding(0, 7, 0, 0) };
     private readonly Button? use;
 
@@ -64,7 +65,7 @@ internal sealed class ProfileLibraryForm : Form
         var catalog = new RoundedButton(primary: saveOnly) { Text = T("New profile…", "Nuovo profilo…") };
         var add = new RoundedButton { Text = T("From a 3MF reference…", "Da un riferimento 3MF…") };
         var close = new RoundedButton { Text = T("Close", "Chiudi"), DialogResult = DialogResult.Cancel };
-        actions.Controls.AddRange([catalog, add, migrate, customize]);
+        actions.Controls.AddRange([catalog, add, migrate, customize, delete]);
         if (!saveOnly)
         {
             use = new RoundedButton(primary: true) { Text = T("Use profile", "Usa profilo") };
@@ -81,6 +82,7 @@ internal sealed class ProfileLibraryForm : Form
         add.Click += async (_, _) => await CreateProfile();
         catalog.Click += async (_, _) => await CreateCatalogProfile();
         customize.Click += async (_, _) => await CustomizePreset();
+        delete.Click += (_, _) => DeleteSelected();
         migrate.Click += async (_, _) =>
         {
             if (profiles.SelectedItem is DestinationProfile { ReferencePath: null } profile)
@@ -104,6 +106,7 @@ internal sealed class ProfileLibraryForm : Form
 
     private void UpdateDetails()
     {
+        delete.Enabled = profiles.SelectedItem is DestinationProfile;
         if (use is not null)
             use.Enabled = profiles.SelectedItem is DestinationProfile;
         migrate.Visible = profiles.SelectedItem is DestinationProfile { ReferencePath: null };
@@ -115,6 +118,22 @@ internal sealed class ProfileLibraryForm : Form
                     + Environment.NewLine + T("Reference 3MF", "Riferimento 3MF") + Environment.NewLine + path
                 : T("Saved preset from an earlier version. It can be converted into a reusable 3MF profile.",
                     "Preset salvato con una versione precedente. Puoi convertirlo in un profilo 3MF riutilizzabile."));
+    }
+
+    private void DeleteSelected()
+    {
+        if (profiles.SelectedItem is not DestinationProfile profile)
+            return;
+        using var confirm = new DeleteProfileForm(profile.Name) { Icon = Icon };
+        if (confirm.ShowDialog(this) != DialogResult.OK)
+            return;
+        try
+        {
+            ProfileStore.Delete(profile);
+            Reload(null);
+            status.Text = T("Profile deleted.", "Profilo eliminato.");
+        }
+        catch (Exception error) { status.Text = error.Message; }
     }
 
     private static string DescribePrinter(DestinationProfile profile)

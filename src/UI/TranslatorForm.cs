@@ -471,7 +471,17 @@ internal sealed class TranslatorForm : Form
         try
         {
             using var dialog = new ProfileLibraryForm(saveOnly ? null : destinationProfile, saveOnly) { Icon = Icon };
-            if (dialog.ShowDialog(this) != DialogResult.OK || dialog.Selection is not DestinationProfile selection)
+            DialogResult result = dialog.ShowDialog(this);
+            if (destinationProfile is not null && !ProfileStore.ReadSaved().Any(profile =>
+                    profile.Name.Equals(destinationProfile.Name, StringComparison.CurrentCultureIgnoreCase)))
+            {
+                destinationProfile = null;
+                referencePrinter = null;
+                template.Clear();
+                UpdateDestinationHint();
+                convert.Enabled = false;
+            }
+            if (result != DialogResult.OK || dialog.Selection is not DestinationProfile selection)
                 return;
 
             destinationProfile = selection;
@@ -552,6 +562,14 @@ internal sealed class TranslatorForm : Form
                     {
                         using var mapping = new FilamentMappingForm(slots, colors, capacity) { Icon = Icon };
                         return mapping.ShowDialog(this) == DialogResult.OK ? mapping.Destinations : throw new OperationCanceledException();
+                    }), invalidSlots => Invoke(() =>
+                    {
+                        using var recovery = new ColorRecoveryForm(invalidSlots) { Icon = Icon };
+                        return recovery.ShowDialog(this) == DialogResult.OK;
+                    }), largeModels => Invoke(() =>
+                    {
+                        using var recovery = new LargeModelForm(largeModels) { Icon = Icon };
+                        return recovery.ShowDialog(this) == DialogResult.OK ? recovery.SelectedLimit : (long?)null;
                     })));
             SetDetails(ConversionDetails.Completed(outputPath, result));
             ShowReport(T("File saved", "File salvato"), T($"Project saved to {outputPath}{Environment.NewLine}{Environment.NewLine}", $"Progetto salvato in {outputPath}{Environment.NewLine}{Environment.NewLine}") + Program.FormatReport(result));

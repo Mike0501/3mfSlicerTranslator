@@ -12,6 +12,7 @@ internal sealed class MachineCatalogForm : Form
     private (string Brand, string Vendor)? SupplementalCatalog => slicer.SelectedItem switch
     {
         "Bambu Studio" => ("Bambu Lab", "BBL"),
+        "Anycubic Slicer Next" => ("Anycubic", "Anycubic"),
         "Creality Print" => ("Creality", "Creality"),
         _ => null
     };
@@ -48,7 +49,7 @@ internal sealed class MachineCatalogForm : Form
         ForeColor = Ink;
         Font = new Font("Segoe UI", 10F);
         orcaStatusPanel = new RoundedPanel(
-            () => orcaConnected ? ConversionDetailsForm.SuccessColors.Surface : ConversionDetailsForm.ErrorColors.Surface, radius: 8)
+            () => orcaConnected ? ConversionDetailsForm.SuccessColors.Surface : Surface, radius: 8)
         {
             AutoSize = true, Dock = DockStyle.Top, Padding = new Padding(9), Margin = new Padding(0, 8, 0, 8)
         };
@@ -84,6 +85,8 @@ internal sealed class MachineCatalogForm : Form
         connection.Controls.Add(locations, 0, 2);
         AddField(T("Destination slicer", "Slicer di destinazione"), slicer, 0);
         slicer.Items.AddRange(["Bambu Studio", "OrcaSlicer", "Anycubic Slicer Next", "Creality Print"]);
+        foreach (var (brandName, models) in BundledPrinterCatalog.ByBrand)
+            orcaModels[brandName == "Bambu Lab" ? "BBL" : brandName] = models;
         AddField(T("Printer brand", "Marchio stampante"), brand, 1);
         AddField(T("Printer model", "Modello stampante"), model, 2);
         AddField(T("Nozzle preset", "Preset ugello"), nozzle, 3);
@@ -117,9 +120,9 @@ internal sealed class MachineCatalogForm : Form
             .Where(path => Equals(LegacyProfileCatalog.GetCatalogSlicerName(path), slicer.SelectedItem)).ToArray());
         Shown += async (_, _) =>
         {
-            orcaStatus.Text = T("Checking for OrcaSlicer…", "Ricerca di OrcaSlicer…");
+            orcaStatus.Text = T("OrcaSlicer is optional and is not connected.", "OrcaSlicer è facoltativo e non è collegato.");
             UseWaitCursor = true;
-            slicer.Enabled = connectOrca.Enabled = browse.Enabled = false;
+            slicer.Enabled = browse.Enabled = false;
             try
             {
                 locationsFound.UnionWith(await Task.Run(() => LegacyProfileCatalog.InstalledSlicers().ToArray()));
@@ -240,21 +243,6 @@ internal sealed class MachineCatalogForm : Form
                     error = failure.Message;
                 }
             }
-            if (SupplementalCatalog is { } catalog && !orcaModels.ContainsKey(catalog.Vendor))
-            {
-                string? orca = locationsFound.FirstOrDefault(path => LegacyProfileCatalog.GetCatalogSlicerName(path) == "OrcaSlicer");
-                if (orca is not null)
-                {
-                    try
-                    {
-                        orcaModels[catalog.Vendor] = await Task.Run(() => LegacyProfileCatalog.ReadOrcaModels(orca, catalog.Vendor));
-                    }
-                    catch (Exception failure) when (failure is IOException or UnauthorizedAccessException or System.Text.Json.JsonException)
-                    {
-                        error ??= failure.Message;
-                    }
-                }
-            }
             IEnumerable<string> brands = SelectedMachines.Select(machine => machine.Brand);
             if (SupplementalCatalog is { } supplement && orcaModels.GetValueOrDefault(supplement.Vendor) is { Length: > 0 })
                 brands = brands.Append(supplement.Brand);
@@ -262,9 +250,13 @@ internal sealed class MachineCatalogForm : Form
             UpdateModels();
             UpdateNozzles();
             UpdateMachine();
-            status.Text = error ?? (slicer.SelectedItem is "Creality Print"
-                ? T("For Creality Print, use From a 3MF reference in the profile library.",
-                    "Per Creality Print, usa Da un riferimento 3MF nella libreria profili.")
+            status.Text = error ?? (slicer.SelectedItem is "OrcaSlicer" && !orcaConnected
+                ? T("Connect OrcaSlicer to browse its printer presets, or use the built-in models and a 3MF reference.",
+                    "Collega OrcaSlicer per consultare i suoi preset stampante oppure usa i modelli integrati con un riferimento 3MF.")
+                : (slicer.SelectedItem is "Creality Print" or "Bambu Studio" or "Anycubic Slicer Next") &&
+                !SelectedMachines.Any()
+                ? T("Choose a bundled printer model, then add a 3MF reference saved by the destination slicer in the profile library.",
+                    "Scegli un modello integrato, poi aggiungi un riferimento 3MF salvato dallo slicer di destinazione nella libreria profili.")
                 : !SelectedMachines.Any()
                     ? T("Locate this slicer or add a reference 3MF from the profile library.",
                         "Individua questo slicer o aggiungi un 3MF di riferimento dalla libreria profili.")
@@ -283,13 +275,12 @@ internal sealed class MachineCatalogForm : Form
     private void UpdateOrcaStatus()
     {
         orcaConnected = locationsFound.Any(path => LegacyProfileCatalog.GetCatalogSlicerName(path) == "OrcaSlicer");
-        connectOrca.Enabled = !orcaConnected;
-        var stateColors = orcaConnected ? ConversionDetailsForm.SuccessColors : ConversionDetailsForm.ErrorColors;
-        orcaStatus.ForeColor = stateColors.Ink;
+        connectOrca.Enabled = true;
+        orcaStatus.ForeColor = orcaConnected ? ConversionDetailsForm.SuccessColors.Ink : Muted;
         orcaStatus.Text = orcaConnected
             ? T("OrcaSlicer connected", "OrcaSlicer collegato")
-            : T("OrcaSlicer not connected · Use Connect OrcaSlicer to select its folder.",
-                "OrcaSlicer non collegato · Usa Collega OrcaSlicer per selezionare la cartella.");
+            : T("Optional · Connect OrcaSlicer to use its printer presets.",
+                "Facoltativo · Collega OrcaSlicer per usare i suoi preset stampante.");
         orcaStatusPanel.Invalidate();
     }
 
