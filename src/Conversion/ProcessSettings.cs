@@ -145,6 +145,38 @@ internal static class ProcessSettings
         "sparse_infill_acceleration", "top_surface_acceleration", "top_solid_infill_flow_ratio"
     };
 
+    private static readonly HashSet<string> SourceObjectSettings = new(StringComparer.Ordinal)
+    {
+        "layer_height", "wall_loops", "wall_generator", "wall_sequence", "wall_distribution_count",
+        "wall_transition_angle", "wall_transition_filter_deviation", "wall_transition_length",
+        "min_bead_width", "min_feature_size", "detect_thin_wall", "only_one_wall_top",
+        "alternate_extra_wall", "ensure_vertical_shell_thickness", "interface_shells", "precise_outer_wall",
+        "top_shell_layers", "bottom_shell_layers", "top_shell_thickness", "bottom_shell_thickness",
+        "top_surface_pattern", "bottom_surface_pattern", "internal_solid_infill_pattern",
+        "sparse_infill_density", "sparse_infill_pattern", "skeleton_infill_density", "skin_infill_density",
+        "minimum_sparse_infill_area", "infill_first", "is_infill_first", "infill_direction", "solid_infill_direction",
+        "rotate_solid_infill_direction", "infill_combination", "infill_anchor", "infill_anchor_max",
+        "infill_wall_overlap", "top_bottom_infill_wall_overlap", "detect_narrow_internal_solid_infill",
+        "seam_position", "seam_gap", "seam_slope_conditional", "seam_slope_entire_loop", "seam_slope_inner_walls",
+        "seam_slope_steps", "staggered_inner_seams", "fuzzy_skin", "fuzzy_skin_point_distance", "fuzzy_skin_thickness",
+        "enable_support", "support_on_build_plate_only", "support_type", "support_style", "support_angle",
+        "support_threshold_angle", "support_threshold_overlap", "enforce_support_layers", "support_critical_regions_only",
+        "support_remove_small_overhang", "support_base_pattern", "support_expansion", "support_base_pattern_spacing",
+        "support_interface_pattern", "support_interface_top_layers", "support_interface_bottom_layers",
+        "support_interface_loop_pattern", "support_interface_not_for_body", "bridge_no_support",
+        "tree_support_branch_angle", "tree_support_branch_angle_organic", "tree_support_branch_diameter",
+        "tree_support_branch_diameter_angle", "tree_support_branch_diameter_organic", "tree_support_tip_diameter",
+        "tree_support_branch_distance", "tree_support_branch_distance_organic", "tree_support_angle_slow",
+        "tree_support_top_rate", "tree_support_wall_count", "tree_support_auto_brim", "tree_support_brim_width",
+        "brim_type", "brim_width", "brim_object_gap", "brim_ears_detection_length", "brim_ears_max_angle",
+        "raft_layers", "raft_expansion", "skirt_loops", "skirt_distance", "skirt_height",
+        "detect_overhang_wall", "extra_perimeters_on_overhangs", "make_overhang_printable",
+        "make_overhang_printable_angle", "spiral_mode", "slicing_mode"
+    };
+
+    internal static bool IsSourceObjectSetting(string key) =>
+        SourceObjectSettings.Contains(key) || UsesFilamentSlot(key) && key is not ("support_filament" or "support_interface_filament");
+
     internal static IEnumerable<string> Keys =>
         Positive.Concat(NonNegative).Concat(Integers).Concat(Switches)
             .Concat(Choices.Keys).Concat(SlotSettings).Concat(Percentages).Concat(SignedNumbers)
@@ -155,7 +187,8 @@ internal static class ProcessSettings
 
     internal static List<string> Transfer(JsonObject source, JsonObject? preset, JsonObject target, int slots,
         List<string> warnings, List<string> retained, (int Index, int Count)? variant = null, ReviewSettings? review = null,
-        bool crealityDestination = false, bool organicSupportStyle = false, bool anycubicDestination = false)
+        bool crealityDestination = false, bool organicSupportStyle = false, bool anycubicDestination = false,
+        IReadOnlyList<SettingDifference>? scopedDifferences = null)
     {
         var transferred = new List<string>();
         var skipped = new List<string>();
@@ -215,14 +248,13 @@ internal static class ProcessSettings
             differences.Add(new SettingDifference(key, DisplayValue(raw), DisplayValue(target[key]), options,
                 translated is null ? SettingDifference.DestinationIndex : 1));
         }
-        if (differences.Count > 0)
+        if (review is not null && (differences.Count > 0 || scopedDifferences is { Count: > 0 }))
         {
-            IReadOnlyDictionary<string, int> choices = review!(differences);
+            IReadOnlyDictionary<string, int> choices = review(scopedDifferences is null
+                ? differences : differences.Concat(scopedDifferences).ToArray());
             foreach (SettingDifference difference in differences)
             {
-                int index = choices.GetValueOrDefault(difference.Key, difference.DefaultIndex);
-                if (index < 0 || index >= difference.Options.Count)
-                    throw new InvalidDataException(T("A setting choice is invalid.", "Una scelta delle impostazioni non è valida."));
+                int index = difference.SelectedIndex(choices);
                 if (difference.Options[index].Value is JsonNode value)
                 {
                     target[difference.Key] = value;
@@ -321,6 +353,12 @@ internal static class ProcessSettings
         bool crealityDestination, bool organicSupportStyle = false, bool anycubicDestination = false)
     {
         translatedValue = value;
+        if (key is "layer_height" or "initial_layer_print_height")
+        {
+            LayerHeightRange range = LayerHeightRange.Read(target);
+            if (PrintPreset.ReadNumber(value) is not decimal height || height < range.Minimum || height > range.Maximum)
+                return false;
+        }
         if (anycubicDestination && key is "raft_first_layer_expansion" or "tree_support_wall_count" &&
             TryNumber(value, out double anycubicNumber) && anycubicNumber < 0)
             return false;

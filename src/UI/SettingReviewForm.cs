@@ -12,11 +12,16 @@ internal sealed class SettingReviewForm : Form
         BackgroundColor = Surface, BorderStyle = BorderStyle.None
     };
 
-    internal IReadOnlyDictionary<string, int> Selections { get; private set; } = new Dictionary<string, int>();
+    private readonly bool destinationObjectsOnly;
+    internal IReadOnlyDictionary<string, int> Selections { get; private set; }
 
-    internal SettingReviewForm(IReadOnlyList<SettingDifference> differences)
+    internal SettingReviewForm(IReadOnlyList<SettingDifference> differences, bool destinationObjectsOnly = false)
     {
-        Text = T("Review process settings", "Rivedi le impostazioni di stampa");
+        this.destinationObjectsOnly = destinationObjectsOnly;
+        Selections = differences.ToDictionary(item => item.Key, StartingIndex, StringComparer.Ordinal);
+        Text = destinationObjectsOnly
+            ? T("Destination object settings", "Impostazioni del pezzo dalla destinazione")
+            : T("Review process settings", "Rivedi le impostazioni di stampa");
         StartPosition = FormStartPosition.CenterParent;
         AutoScaleMode = AutoScaleMode.Dpi;
         Font = new Font("Segoe UI", 10F);
@@ -44,8 +49,11 @@ internal sealed class SettingReviewForm : Form
         }, 0, 0);
         layout.Controls.Add(new Label
         {
-            Text = T("Choose the value to save. Settings without a compatible source value follow the destination profile.",
-                "Scegli il valore da salvare. Le voci senza un valore di origine compatibile seguono il profilo di destinazione."),
+            Text = destinationObjectsOnly
+                ? T("The destination is selected for every setting. Review walls, infill, supports and other settings for the part.",
+                    "Tutte le voci partono dalla destinazione. Puoi rivedere pareti, riempimento, supporti e altre impostazioni del pezzo.")
+                : T("The suggested values use source settings for the part and destination values for calibrations such as speed and flow.",
+                    "I valori suggeriti usano le impostazioni di origine per il pezzo e quelle di destinazione per calibrazioni come velocità e flusso."),
             Dock = DockStyle.Fill, AutoSize = true, Margin = new Padding(3, 5, 3, 12)
         }, 0, 1);
         var search = new TextBox
@@ -60,7 +68,7 @@ internal sealed class SettingReviewForm : Form
             grid.CurrentCell = null;
             string query = search.Text.Trim();
             foreach (DataGridViewRow row in grid.Rows)
-                row.Visible = ((SettingDifference)row.Tag!).Key.Contains(query, StringComparison.OrdinalIgnoreCase);
+                row.Visible = ((SettingDifference)row.Tag!).DisplayName.Contains(query, StringComparison.OrdinalIgnoreCase);
         };
         layout.Controls.Add(search, 0, 2);
 
@@ -89,13 +97,16 @@ internal sealed class SettingReviewForm : Form
             HeaderText = T("Value to save", "Valore da salvare"), FillWeight = 32, SortMode = DataGridViewColumnSortMode.NotSortable,
             FlatStyle = Dark ? FlatStyle.Flat : FlatStyle.Standard
         });
-        foreach (SettingDifference difference in differences.OrderBy(item => item.Key, StringComparer.Ordinal))
+        var visible = destinationObjectsOnly ? differences.Where(item => item.IsObjectSetting && item.Options.Count > 1) : differences;
+        foreach (SettingDifference difference in visible.OrderBy(item => item.Scope is not null)
+                     .ThenBy(item => item.DisplayName, StringComparer.CurrentCulture))
         {
-            var row = grid.Rows[grid.Rows.Add(difference.Key, difference.SourceValue, difference.DestinationValue)];
+            var row = grid.Rows[grid.Rows.Add(difference.DisplayName, difference.SourceValue, difference.DestinationValue)];
+            row.Cells[0].ToolTipText = difference.DisplayName;
             row.Tag = difference;
             var choice = (DataGridViewComboBoxCell)row.Cells[3];
             choice.Items.AddRange(difference.Options.Select(option => option.Label).ToArray());
-            choice.Value = difference.Options[difference.DefaultIndex].Label;
+            choice.Value = difference.Options[StartingIndex(difference)].Label;
             if (difference.Options.Count == 1)
             {
                 choice.ReadOnly = true;
@@ -109,13 +120,22 @@ internal sealed class SettingReviewForm : Form
 
         var apply = new RoundedButton(primary: true) { Text = T("Apply and save", "Applica e salva") };
         var cancel = new RoundedButton { Text = T("Cancel", "Annulla"), DialogResult = DialogResult.Cancel };
-        var suggested = new RoundedButton { Text = T("Use suggested values", "Usa valori suggeriti") };
-        var destination = new RoundedButton { Text = T("Keep all destination values", "Mantieni tutti i valori di destinazione") };
+        var suggested = new RoundedButton
+        {
+            Text = destinationObjectsOnly
+                ? T("Reset to destination", "Ripristina destinazione")
+                : T("Reset to suggested values", "Ripristina valori suggeriti")
+        };
         apply.Click += (_, _) => Apply();
-        suggested.Click += (_, _) => SelectAll(useSuggested: true);
-        destination.Click += (_, _) => SelectAll(useSuggested: false);
+        suggested.Click += (_, _) => ResetValues();
         var actions = new FlowLayoutPanel { AutoSize = true, Dock = DockStyle.Fill, Margin = new Padding(0, 10, 0, 0) };
-        actions.Controls.AddRange([apply, cancel, suggested, destination]);
+        actions.Controls.AddRange([apply, cancel, suggested]);
+        if (!destinationObjectsOnly)
+        {
+            var destination = new RoundedButton { Text = T("Keep all destination values", "Mantieni tutti i valori di destinazione") };
+            destination.Click += (_, _) => ResetValues(useDestination: true);
+            actions.Controls.Add(destination);
+        }
         layout.Controls.Add(actions, 0, 4);
         AcceptButton = apply;
         CancelButton = cancel;
@@ -127,13 +147,17 @@ internal sealed class SettingReviewForm : Form
         HeaderText = title, FillWeight = weight, ReadOnly = true, SortMode = DataGridViewColumnSortMode.NotSortable
     };
 
-    private void SelectAll(bool useSuggested)
+    private int StartingIndex(SettingDifference difference) =>
+        destinationObjectsOnly ? SettingDifference.DestinationIndex : difference.ObjectSettingsIndex;
+
+    private void ResetValues(bool useDestination = false)
     {
         grid.EndEdit();
         foreach (DataGridViewRow row in grid.Rows)
         {
             var difference = (SettingDifference)row.Tag!;
-            row.Cells[3].Value = difference.Options[useSuggested ? difference.DefaultIndex : SettingDifference.DestinationIndex].Label;
+            int index = useDestination ? SettingDifference.DestinationIndex : StartingIndex(difference);
+            row.Cells[3].Value = difference.Options[index].Label;
         }
     }
 
@@ -141,7 +165,7 @@ internal sealed class SettingReviewForm : Form
     {
         if (!grid.EndEdit())
             return;
-        var selections = new Dictionary<string, int>(StringComparer.Ordinal);
+        var selections = new Dictionary<string, int>(Selections, StringComparer.Ordinal);
         foreach (DataGridViewRow row in grid.Rows)
         {
             var difference = (SettingDifference)row.Tag!;
@@ -149,7 +173,7 @@ internal sealed class SettingReviewForm : Form
             {
                 if (Equals(row.Cells[3].Value, difference.Options[index].Label))
                 {
-                    selections.Add(difference.Key, index);
+                    selections[difference.Key] = index;
                     break;
                 }
             }
