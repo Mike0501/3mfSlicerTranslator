@@ -10,10 +10,13 @@ To build it, install the .NET 10 SDK and run this command from the repository ro
 Use the selector in the upper-right corner to switch between English and Italian.
 The sun and moon switch changes the theme. The question mark opens the in-app
 quick guide. The app saves your language and theme preferences.
+Click the version in the header to check GitHub for a newer release. Open the
+release page to download an update manually.
 
 -Converting a project
 
-1. Click Browse and choose the source 3MF. Under Source settings to import,
+1. Drop one 3MF onto the app window or click Browse to choose the source.
+   Under Source settings to import,
    use its active settings or select an embedded process preset. The app uses
    the active settings for fields missing from the selected preset.
 2. In the destination slicer, choose your printer, nozzle, and presets. Save a
@@ -38,6 +41,12 @@ quick guide. The app saves your language and theme preferences.
    listed model. Loading large models can require several times their size
    in memory. The chosen limit is included in Result details. It concerns
    uncompressed model data; it does not change the physical print dimensions.
+   If the destination plate differs and object positions need adjustment,
+   choose Adjust positions after reviewing print settings. The app moves
+   the objects together on each affected plate, preserving their spacing,
+   rotation, size and your chosen print settings. You can also keep the
+   original positions or cancel. Plates that cannot fit as a group, or
+   layouts the app cannot verify, need a check in the destination slicer.
 4. Open Result details below the report. Red indicates errors, yellow indicates
    warnings, and green indicates success without warnings. Open the translated
    3MF as a project in the destination slicer, slice it, and check the preview.

@@ -7,7 +7,7 @@ internal sealed record TranslatorSelection(string Source, string? Preset, string
 
 internal sealed class TranslatorForm : Form
 {
-    private readonly TextBox source = FileField(T("Source 3MF project", "Progetto 3MF di origine"), T("No project selected", "Nessun progetto selezionato"));
+    private readonly TextBox source = FileField(T("Source 3MF project", "Progetto 3MF di origine"), T("Drop a 3MF here", "Trascina qui un 3MF"));
     private readonly TextBox template = FileField(T("Destination 3MF project", "Progetto 3MF di destinazione"), T("No reference selected", "Nessun modello selezionato"));
     private readonly ComboBox process = new()
     {
@@ -30,6 +30,13 @@ internal sealed class TranslatorForm : Form
     private readonly Button templateBrowse = StyledButton(T("Reference 3MF…", "Riferimento 3MF…"));
     private readonly Button profileBrowse = StyledButton(T("Profile…", "Profilo…"));
     private readonly Button createProfile = StyledButton(T("Create profile…", "Crea profilo…"));
+    private readonly RoundedButton version = new()
+    {
+        Text = $"v{AppUpdates.InstalledVersion}",
+        AccessibleName = T($"Version {AppUpdates.InstalledVersion}. Check for updates",
+            $"Versione {AppUpdates.InstalledVersion}. Verifica aggiornamenti"),
+        Padding = new Padding(12, 6, 12, 6), Margin = new Padding(10, 0, 0, 0)
+    };
     private readonly ThemeSwitch theme = new();
     private readonly Button help = IconButton(T("Quick guide", "Guida rapida"), ToolbarIcon.Help);
     private readonly ToolTip toolbarTips = new() { InitialDelay = 350, ReshowDelay = 100, AutoPopDelay = 5000 };
@@ -81,6 +88,7 @@ internal sealed class TranslatorForm : Form
         footer.Margin = new Padding(26, 12, 26, 14);
         page.Controls.Add(footer, 0, 2);
         Controls.Add(page);
+        EnableSourceDrop(this);
         BindColors(footer, foreground: () => Muted);
         BindColors(destinationHint, foreground: () => Muted);
         foreach (Control input in new Control[] { source, template, process, report, language })
@@ -120,13 +128,12 @@ internal sealed class TranslatorForm : Form
             "Scegli un 3MF di origine e un progetto di riferimento salvato con la stampante e le impostazioni che vuoi usare."));
         if (selection is not null)
         {
-            source.Text = selection.Source;
             template.Text = selection.Destination;
             destinationProfile = selection.Profile;
             referencePrinter = selection.ReferencePrinter;
-            if (source.TextLength > 0)
+            if (!string.IsNullOrEmpty(selection.Source))
             {
-                ReadSourceProcesses();
+                LoadSourceProject(selection.Source);
                 if (selection.Preset is not null)
                 {
                     SourceProcess? selected = process.Items.OfType<SourceProcess>().FirstOrDefault(item => item.Entry == selection.Preset);
@@ -168,16 +175,19 @@ internal sealed class TranslatorForm : Form
         description.Margin = new Padding(2, 2, 0, 0);
         header.Controls.Add(description, 1, 1);
 
-        Label offline = Caption("OFFLINE", 9, Color.FromArgb(172, 247, 231), semibold: true);
-        offline.BackColor = Color.FromArgb(37, 55, 94);
-        offline.Padding = new Padding(12, 6, 12, 6);
-        offline.Margin = new Padding(10, 2, 0, 0);
+        version.SetColors(Color.FromArgb(37, 55, 94), Color.FromArgb(172, 247, 231));
+        toolbarTips.SetToolTip(version, T("Check for updates", "Verifica aggiornamenti"));
+        version.Click += (_, _) =>
+        {
+            using var dialog = new UpdateCheckForm { Icon = Icon };
+            dialog.ShowDialog(this);
+        };
         var actions = new FlowLayoutPanel
         {
             AutoSize = true, Anchor = AnchorStyles.Right, WrapContents = false, Margin = new Padding(12, 0, 0, 0)
         };
         actions.Controls.Add(createProfile);
-        actions.Controls.Add(offline);
+        actions.Controls.Add(version);
         header.Controls.Add(actions, 2, 0);
         var preferences = new FlowLayoutPanel
         {
@@ -402,14 +412,55 @@ internal sealed class TranslatorForm : Form
 
     private void PickSourceProject()
     {
-        if (BrowseProject(T("Choose the source project", "Scegli il progetto di origine")) is not string path)
-            return;
-
-        source.Text = path;
-        source.Select(0, 0);
-        ReadSourceProcesses();
-        convert.Enabled = process.SelectedItem is SourceProcess && template.TextLength > 0;
+        if (BrowseProject(T("Choose the source project", "Scegli il progetto di origine")) is string path)
+            LoadSourceProject(path);
     }
+
+    private void LoadSourceProject(string path)
+    {
+        try
+        {
+            List<SourceProcess> processes = ProjectConverter.GetSourceProcesses(path);
+            source.Text = path;
+            source.Select(0, 0);
+            process.Items.Clear();
+            process.Items.AddRange(processes.ToArray());
+            process.SelectedIndex = 0;
+            process.Enabled = true;
+            convert.Enabled = template.TextLength > 0;
+            SetDetails(null);
+            ShowReport(T("Source loaded", "Origine letta"), processes.Count > 1
+                ? T("Use the active settings or choose a preset embedded by the author.", "Puoi usare le impostazioni attive o scegliere un preset incorporato dall’autore.")
+                : T("The active settings from the source project will be imported.", "Verranno importate le impostazioni attive del progetto di origine."));
+        }
+        catch (Exception error)
+        {
+            ShowError(Path.GetFileName(path), T("Could not read the source project. ", "Impossibile leggere il progetto di origine. ") + error.Message);
+        }
+    }
+
+    private void EnableSourceDrop(Control control)
+    {
+        control.AllowDrop = true;
+        control.DragEnter += UpdateDropEffect;
+        control.DragOver += UpdateDropEffect;
+        control.DragDrop += (_, args) =>
+        {
+            if (!UseWaitCursor && DroppedSource(args) is string path)
+                LoadSourceProject(path);
+        };
+        foreach (Control child in control.Controls)
+            EnableSourceDrop(child);
+    }
+
+    private void UpdateDropEffect(object? sender, DragEventArgs args) =>
+        args.Effect = !UseWaitCursor && DroppedSource(args) is not null ? DragDropEffects.Copy : DragDropEffects.None;
+
+    private static string? DroppedSource(DragEventArgs args) =>
+        args.AllowedEffect.HasFlag(DragDropEffects.Copy) &&
+        args.Data?.GetData(DataFormats.FileDrop, autoConvert: false) is string[] { Length: 1 } files &&
+        string.Equals(Path.GetExtension(files[0]), ".3mf", StringComparison.OrdinalIgnoreCase)
+            ? files[0] : null;
 
     private void PickDestinationReference()
     {
@@ -443,27 +494,6 @@ internal sealed class TranslatorForm : Form
         destinationHint.AutoSize = false;
         destinationHint.Height = destinationHint.PreferredHeight;
         destinationHint.Dock = DockStyle.Top;
-    }
-
-    private void ReadSourceProcesses()
-    {
-        process.Items.Clear();
-        process.Enabled = false;
-        try
-        {
-            List<SourceProcess> processes = ProjectConverter.GetSourceProcesses(source.Text);
-            process.Items.AddRange(processes.ToArray());
-            process.SelectedIndex = 0;
-            process.Enabled = true;
-            SetDetails(null);
-            ShowReport(T("Source loaded", "Origine letta"), processes.Count > 1
-                ? T("Use the active settings or choose a preset embedded by the author.", "Puoi usare le impostazioni attive o scegliere un preset incorporato dall’autore.")
-                : T("The active settings from the source project will be imported.", "Verranno importate le impostazioni attive del progetto di origine."));
-        }
-        catch (Exception error)
-        {
-            ShowError(Path.GetFileName(source.Text), T("Could not read the source project. ", "Impossibile leggere il progetto di origine. ") + error.Message);
-        }
     }
 
     private void PickDestinationProfile(bool saveOnly = false)
@@ -570,6 +600,15 @@ internal sealed class TranslatorForm : Form
                     {
                         using var recovery = new LargeModelForm(largeModels) { Icon = Icon };
                         return recovery.ShowDialog(this) == DialogResult.OK ? recovery.SelectedLimit : (long?)null;
+                    }), placement => Invoke(() =>
+                    {
+                        using var dialog = new PlatePlacementForm(placement) { Icon = Icon };
+                        return dialog.ShowDialog(this) switch
+                        {
+                            DialogResult.Yes => PlacementChoice.Adjust,
+                            DialogResult.No => PlacementChoice.Keep,
+                            _ => PlacementChoice.Cancel
+                        };
                     })));
             SetDetails(ConversionDetails.Completed(outputPath, result));
             ShowReport(T("File saved", "File salvato"), T($"Project saved to {outputPath}{Environment.NewLine}{Environment.NewLine}", $"Progetto salvato in {outputPath}{Environment.NewLine}{Environment.NewLine}") + Program.FormatReport(result));
@@ -616,6 +655,7 @@ internal sealed class TranslatorForm : Form
         templateBrowse.Enabled = !busy;
         profileBrowse.Enabled = !busy;
         createProfile.Enabled = !busy;
+        version.Enabled = !busy;
         language.Enabled = !busy;
         theme.Enabled = !busy;
         help.Enabled = !busy;
