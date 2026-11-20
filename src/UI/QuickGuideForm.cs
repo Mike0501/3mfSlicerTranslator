@@ -42,8 +42,8 @@ internal sealed class QuickGuideForm : Form
         };
         using var heading = new Font("Segoe UI Semibold", 11F);
         AddStep("1", T("Open the source project", "Apri il progetto di origine"),
-            T("Click Browse… and choose the downloaded 3MF. Use its active print settings or select an embedded preset if one is available.",
-              "Premi Sfoglia… e scegli il 3MF scaricato. Usa le impostazioni di stampa attive oppure seleziona un preset incorporato, se disponibile."));
+            T("Drop a 3MF onto the app window or open it with Browse… to load it as the source. Use its active print settings or select an embedded preset if available.",
+              "Trascina un 3MF sulla finestra o aprilo con Sfoglia… per caricarlo come origine. Usa le impostazioni di stampa attive oppure seleziona un preset incorporato, se disponibile."));
         AddStep("2", T("Choose the destination", "Scegli la destinazione"),
             T("In Create profile… → New profile…, choose the destination slicer before choosing a printer. The built-in model list works without OrcaSlicer. If the selected printer has no compatible preset on this computer, use From a 3MF reference… and add a project saved in the destination slicer. Use Customize… to save a print preset.",
               "In Crea profilo… → Nuovo profilo…, scegli lo slicer di destinazione prima della stampante. L’elenco modelli integrato funziona anche senza OrcaSlicer. Se per la stampante scelta non c’è un preset compatibile nel computer, usa Da un riferimento 3MF… e aggiungi un progetto salvato nello slicer di destinazione. Usa Personalizza… per salvare un preset di stampa."));

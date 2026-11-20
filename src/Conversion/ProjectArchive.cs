@@ -76,6 +76,12 @@ internal sealed class ProjectArchive : IDisposable
 
     internal XDocument ReadXml(string name)
     {
+        using XmlReader reader = OpenXml(name);
+        return XDocument.Load(reader);
+    }
+
+    internal XmlReader OpenXml(string name)
+    {
         long limit = DefaultModelSizeLimit;
         if (IsGeometryModel(name))
         {
@@ -98,13 +104,12 @@ internal sealed class ProjectArchive : IDisposable
             }
             limit = ModelSizeLimit;
         }
-        using Stream stream = Open(name, limit);
-        using XmlReader reader = XmlReader.Create(stream, new XmlReaderSettings
+        return XmlReader.Create(Open(name, limit), new XmlReaderSettings
         {
+            CloseInput = true,
             DtdProcessing = DtdProcessing.Prohibit,
             MaxCharactersInDocument = limit
         });
-        return XDocument.Load(reader);
     }
 
     private static bool IsGeometryModel(string name) => name.StartsWith("3D/", StringComparison.OrdinalIgnoreCase) &&

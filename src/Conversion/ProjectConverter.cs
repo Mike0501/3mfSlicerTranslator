@@ -132,7 +132,8 @@ internal static class ProjectConverter
     internal static ConversionResult Convert(string sourcePath, string templatePath, string outputPath,
         string? sourcePresetEntry = null, ReviewSettings? review = null, PrintPreset? destinationPreset = null,
         ReviewFilamentSlots? reviewSlots = null, Func<IReadOnlyList<int>, bool>? reviewInvalidColors = null,
-        Func<LargeModelRequest, long?>? reviewLargeModels = null)
+        Func<LargeModelRequest, long?>? reviewLargeModels = null,
+        Func<PlacementReview, PlacementChoice>? reviewPlacement = null)
     {
         outputPath = Path.GetFullPath(outputPath);
         if (File.Exists(outputPath))
@@ -190,14 +191,15 @@ internal static class ProjectConverter
         JsonObject translatedPreset = BuildTranslatedPreset(target, template, outputPath, targetColors.Length, settings.Concat(presetChanges));
 
         int plates = SanitizeModelSettings(modelSettings, target, colors.Length, warnings, crealityDestination, organicSupportStyle, anycubicDestination);
+        PlatePlacement.Review(source, modelRoot, modelSettings.Root!, original, target, warnings, reviewPlacement);
         (XDocument? events, int layerChanges) = FilterLayerEvents(source, plates, colors.Length, warnings);
         if (source.Contains("Metadata/layer_config_ranges.xml"))
             warnings.Add(T("Height range settings were skipped.", "Le impostazioni per intervalli di altezza non sono state trasferite."));
         if (source.Names.Any(name => name.EndsWith(".gcode", StringComparison.OrdinalIgnoreCase)))
             warnings.Add(T("Previously generated G-code was removed. Slice the project again.", "Il G-code già elaborato è stato rimosso. Esegui di nuovo lo slicing."));
-        if (!JsonNode.DeepEquals(original["printable_area"], target["printable_area"]) ||
-            !JsonNode.DeepEquals(original["printable_height"], target["printable_height"]))
-            warnings.Add(T("The build volume differs. Check object positions and the footprint on each plate in the slicer.", "Il volume di stampa è diverso. Controlla la posizione degli oggetti e l'ingombro di ogni piatto nello slicer."));
+        if (!JsonNode.DeepEquals(original["printable_height"], target["printable_height"]))
+            warnings.Add(T("The destination print height differs. Check that the models fit vertically.",
+                "L’altezza di stampa della destinazione è diversa. Controlla che i modelli rientrino in altezza."));
 
         var retained = source.Names.Where(KeepSourcePart).ToHashSet(StringComparer.OrdinalIgnoreCase);
         retained.UnionWith([Model, Settings, ModelSettings, TranslatedPreset]);
