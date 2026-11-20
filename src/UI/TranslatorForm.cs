@@ -636,15 +636,18 @@ internal sealed class TranslatorForm : Form
 
         return choices.Selection switch
         {
+            SettingChoice.SourceObject => differences.ToDictionary(item => item.Key, item => item.ObjectSettingsIndex, StringComparer.Ordinal),
             SettingChoice.Source => differences.ToDictionary(item => item.Key, item => item.DefaultIndex, StringComparer.Ordinal),
-            SettingChoice.Destination => differences.ToDictionary(item => item.Key, _ => SettingDifference.DestinationIndex, StringComparer.Ordinal),
+            SettingChoice.Destination => ShowSettingReview(differences, destinationObjectsOnly: true),
             _ => ShowSettingReview(differences)
         };
     }
 
-    private IReadOnlyDictionary<string, int>? ShowSettingReview(IReadOnlyList<SettingDifference> differences)
+    private IReadOnlyDictionary<string, int>? ShowSettingReview(IReadOnlyList<SettingDifference> differences, bool destinationObjectsOnly = false)
     {
-        using var dialog = new SettingReviewForm(differences) { Icon = Icon };
+        using var dialog = new SettingReviewForm(differences, destinationObjectsOnly) { Icon = Icon };
+        if (destinationObjectsOnly && !differences.Any(item => item.IsObjectSetting && item.Options.Count > 1))
+            return dialog.Selections;
         return dialog.ShowDialog(this) == DialogResult.OK ? dialog.Selections : null;
     }
 

@@ -187,10 +187,33 @@ internal static class ProjectConverter
             warnings.Add(T($"A project with {sourceNozzles} nozzles was adapted to one nozzle. Check filament changes in the preview.", $"Progetto da {sourceNozzles} ugelli adattato a un solo ugello. Verifica i cambi di filamento nell'anteprima."));
         CopyPalette(original, target, colors, targetColors, sourceSlots, warnings);
         var retainedSettings = new List<string>();
-        List<string> settings = ProcessSettings.Transfer(original, preset, target, colors.Length, warnings, retainedSettings, variant, review, crealityDestination, organicSupportStyle, anycubicDestination);
+        var scopedSettings = new List<ScopedSetting>();
+        int plates = PrepareModelSettings(modelSettings, target, colors.Length, warnings, crealityDestination, organicSupportStyle, anycubicDestination, scopedSettings);
+        IReadOnlyDictionary<string, int>? selections = null;
+        ReviewSettings? reviewAll = review is null ? null : differences => selections = review(differences);
+        List<string> settings = ProcessSettings.Transfer(original, preset, target, colors.Length, warnings, retainedSettings,
+            variant, reviewAll, crealityDestination, organicSupportStyle, anycubicDestination,
+            scopedSettings.Select(setting => setting.Difference).ToArray());
         JsonObject translatedPreset = BuildTranslatedPreset(target, template, outputPath, targetColors.Length, settings.Concat(presetChanges));
+        foreach (ScopedSetting setting in scopedSettings)
+        {
+            if (setting.Difference.SelectedIndex(selections) == SettingDifference.DestinationIndex)
+            {
+                setting.Original.Remove();
+                retainedSettings.Add(setting.Difference.DisplayName);
+            }
+            else
+            {
+                setting.Original.ReplaceWith(setting.Translated);
+                settings.Add(setting.Difference.DisplayName);
+            }
+        }
+        if (ProcessSettings.StringValue(target["print_sequence"]) == "by object" ||
+            modelSettings.Root!.Elements("plate").SelectMany(plate => plate.Elements("metadata")).Any(item =>
+                (string?)item.Attribute("key") == "print_sequence" && (string?)item.Attribute("value") == "by object"))
+            warnings.Add(T("Sequential printing is enabled. Check printhead clearance in the destination slicer.",
+                "La stampa sequenziale è attiva. Controlla l’ingombro della testina nello slicer di destinazione."));
 
-        int plates = SanitizeModelSettings(modelSettings, target, colors.Length, warnings, crealityDestination, organicSupportStyle, anycubicDestination);
         PlatePlacement.Review(source, modelRoot, modelSettings.Root!, original, target, warnings, reviewPlacement);
         (XDocument? events, int layerChanges) = FilterLayerEvents(source, plates, colors.Length, warnings);
         if (source.Contains("Metadata/layer_config_ranges.xml"))
@@ -429,8 +452,10 @@ internal static class ProjectConverter
         (archive.Contains("Metadata/slice_info.config") && archive.ReadXml("Metadata/slice_info.config")
             .Descendants("header_item").Any(item => ((string?)item.Attribute("key"))?.StartsWith("X-ACNext-", StringComparison.Ordinal) == true));
 
-    private static int SanitizeModelSettings(XDocument document, JsonObject target, int slots, List<string> warnings,
-        bool crealityDestination, bool organicSupportStyle, bool anycubicDestination)
+    private sealed record ScopedSetting(SettingDifference Difference, XElement Original, XElement[] Translated);
+
+    private static int PrepareModelSettings(XDocument document, JsonObject target, int slots, List<string> warnings,
+        bool crealityDestination, bool organicSupportStyle, bool anycubicDestination, List<ScopedSetting> scoped)
     {
         if (document.Root is not XElement root || root.Name != "config")
             throw new InvalidDataException(T("The object settings file has an unsupported format.", "Il file delle impostazioni per oggetto ha un formato non supportato."));
@@ -450,37 +475,86 @@ internal static class ProjectConverter
                 item.Remove();
             else if (key is not null && !ObjectMetadata.Contains(key))
             {
-                bool mapped = false;
+                var translated = new List<XElement>();
+                bool hasExistingAlias = false;
                 foreach (string translatedKey in ProcessSettings.TargetKeys(key, target))
                 {
                     if (!ProcessSettings.TryTranslate(translatedKey, value, target, slots, out string translatedValue, crealityDestination, organicSupportStyle, anycubicDestination))
                         continue;
-                    mapped = true;
                     if (translatedKey != key && item.Parent!.Elements("metadata").Any(sibling =>
                             (string?)sibling.Attribute("key") == translatedKey))
+                    {
+                        hasExistingAlias = true;
                         continue;
-                    var translated = new XElement(item);
-                    translated.SetAttributeValue("key", translatedKey);
-                    translated.SetAttributeValue("value", translatedValue);
-                    item.AddBeforeSelf(translated);
+                    }
+                    var entry = new XElement(item);
+                    entry.SetAttributeValue("key", translatedKey);
+                    entry.SetAttributeValue("value", translatedValue);
+                    translated.Add(entry);
                 }
-                if (!mapped)
-                    skipped.Add(key);
-                item.Remove();
+                if (translated.Count > 0)
+                    AddScoped(item, key, DescribeObject(item.Parent!), value, translated.ToArray());
+                else
+                {
+                    if (!hasExistingAlias)
+                        skipped.Add(key);
+                    item.Remove();
+                }
+            }
+        }
+
+        XElement[] plates = root.Elements("plate").ToArray();
+        for (int index = 0; index < plates.Length; index++)
+        {
+            foreach (XElement item in plates[index].Elements("metadata").ToArray())
+            {
+                if ((string?)item.Attribute("key") is not string key)
+                    continue;
+                if (!PlateMetadata.Contains(key))
+                    item.Remove();
+                else if (key == "print_sequence")
+                {
+                    string? value = (string?)item.Attribute("value");
+                    if (value is "by object" or "by layer")
+                        AddScoped(item, key, T($"Plate {index + 1}", $"Piatto {index + 1}"), value, [new XElement(item)]);
+                    else
+                    {
+                        skipped.Add(key);
+                        item.Remove();
+                    }
+                }
             }
         }
 
         if (skipped.Count > 0)
-            warnings.Add(T("Skipped object settings · ", "Impostazioni per oggetto escluse: ") + string.Join(", ", skipped) + ".");
-
-        XElement[] plates = root.Elements("plate").ToArray();
-        foreach (XElement item in plates.SelectMany(plate => plate.Elements("metadata")).ToArray())
-        {
-            if ((string?)item.Attribute("key") is string key && !PlateMetadata.Contains(key))
-                item.Remove();
-        }
-
+            warnings.Add(T("Skipped object or plate settings · ", "Impostazioni per oggetto o piatto escluse: ") + string.Join(", ", skipped) + ".");
         return Math.Max(1, plates.Length);
+
+        void AddScoped(XElement item, string key, string scope, string value, XElement[] translated)
+        {
+            string inherited = T("Use process settings", "Usa impostazioni di stampa");
+            string sourceValue = string.Join(" / ", translated.Select(entry => (string?)entry.Attribute("value")).Distinct());
+            var difference = new SettingDifference($"scoped/{scoped.Count}", value, inherited,
+                [new(inherited, null), new(T($"Use source · {sourceValue}", $"Usa origine · {sourceValue}"), JsonValue.Create(sourceValue))],
+                1, key, scope);
+            scoped.Add(new ScopedSetting(difference, item, translated));
+        }
+    }
+
+    private static string DescribeObject(XElement scope)
+    {
+        XElement? obj = scope.AncestorsAndSelf("object").FirstOrDefault();
+        string? id = (string?)obj?.Attribute("id");
+        string? name = (string?)obj?.Elements("metadata").FirstOrDefault(item => (string?)item.Attribute("key") == "name")?.Attribute("value");
+        string label = T($"Object {id}", $"Oggetto {id}");
+        if (!string.IsNullOrWhiteSpace(name))
+            label += $" ({name})";
+        if (scope != obj)
+        {
+            string? part = (string?)scope.Attribute("id");
+            label += T($" · Part {part}", $" · Parte {part}");
+        }
+        return label;
     }
 
     private static (XDocument? Document, int Count) FilterLayerEvents(ProjectArchive source, int plates, int slots,

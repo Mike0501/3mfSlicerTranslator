@@ -22,10 +22,23 @@ release page to download an update manually.
 2. In the destination slicer, choose your printer, nozzle, and presets. Save a
    project with a simple object. In the translator, click Reference 3MF and
    open that project, or click Profile to choose a saved destination profile.
-3. Click Translate and save and choose a new file name. If the print settings
-   differ, choose Use source settings, Keep destination settings, or Review
-   manually to select values individually. The app keeps destination values
-   where no compatible source value is available. Cancel stops the conversion.
+3. Click Translate and save and choose a new file name. When print settings
+   differ, choose one of these options.
+   - Keep source object settings carries over compatible layer height, walls,
+     infill, seam and support choices. Speeds, first layer calibration,
+     extrusion flow, dimensional compensation and print order follow the
+     destination process.
+   - Use all compatible source settings includes other compatible process
+     values, such as speeds and accelerations.
+   - Keep destination object settings starts with the destination process.
+     You can edit the settings for the part, including compatible object
+     overrides. Calibrations and print order follow the destination.
+   - Review manually starts with source settings for the part and destination
+     values for calibrations. You can then choose individual compatible global,
+     object or plate values. Geometry and mapped filament assignments follow
+     the project.
+   The app uses destination values where a source value has no compatible
+   mapping. Cancel stops the conversion.
    If the destination has fewer filament slots, the desktop app can ask you
    to confirm or adjust the suggested mapping for the used filaments. When
    multiple filaments share a destination slot, they use the color of the
@@ -93,8 +106,9 @@ support setting. Variants share the same reference and can be edited later.
 To remove a saved profile, select it in the library, click Delete profile,
 and confirm. If it was the selected conversion destination, choose another
 profile before converting. Other presets sharing its reference remain usable.
-During conversion, choose Keep destination settings to apply the selected
-variant, or use Review manually to choose individual settings.
+During conversion, choose Keep destination object settings to apply the
+selected variant and review only settings for the part. Use Review manually
+to choose individual values across the process.
 Organic support styles are translated to the destination slicer's spelling:
 organic for Anycubic Slicer Next, OrcaSlicer and Creality Print;
 tree_organic for Bambu Studio.

@@ -4,6 +4,7 @@ namespace Translator;
 
 internal enum SettingChoice
 {
+    SourceObject,
     Source,
     Destination,
     Manual
@@ -37,12 +38,17 @@ internal sealed class SettingChoiceForm : Form
             Text = T("Which print settings should we use?", "Quali impostazioni di stampa vuoi usare?"),
             Font = new Font("Segoe UI Semibold", 15F), AutoSize = true, Margin = new Padding(0, 0, 0, 14)
         });
-        AddChoice(layout, SettingChoice.Source, T("Use source settings", "Usa impostazioni di origine"),
-            T("Apply compatible values from the source project.", "Applica i valori compatibili del progetto di origine."));
-        AddChoice(layout, SettingChoice.Destination, T("Keep destination settings", "Mantieni impostazioni di destinazione"),
-            T("Use the selected destination print settings.", "Usa le impostazioni di stampa della destinazione scelta."));
+        AddChoice(layout, SettingChoice.SourceObject, T("Keep source object settings", "Mantieni le impostazioni del pezzo dall’origine"),
+            T("Use source walls, layers, infill, seam and supports.\nKeep destination speeds, flow, dimensional corrections and print order.",
+                "Usa pareti, strati, riempimento, cucitura e supporti dell’origine.\nMantieni velocità, flusso, compensazioni e ordine di stampa della destinazione."));
+        AddChoice(layout, SettingChoice.Source, T("Use all compatible source settings", "Usa tutte le impostazioni compatibili di origine"),
+            T("Include compatible process speeds, calibrations and overrides.", "Includi velocità di stampa, calibrazioni e impostazioni specifiche compatibili."));
+        AddChoice(layout, SettingChoice.Destination, T("Keep destination object settings", "Mantieni le impostazioni del pezzo dalla destinazione"),
+            T("Start with the destination settings and edit only the settings for the part.",
+                "Parti dalle impostazioni di destinazione e modifica solo quelle del pezzo."));
         AddChoice(layout, SettingChoice.Manual, T("Review manually…", "Rivedi manualmente…"),
-            T("Compare the values and choose one setting at a time.", "Confronta i valori e scegli un’impostazione alla volta."));
+            T("Start with source object settings and destination calibrations. Adjust values individually.",
+                "Parti dalle impostazioni del pezzo di origine e dalle calibrazioni di destinazione. Scegli i valori voce per voce."));
 
         var cancel = new RoundedButton
         {
